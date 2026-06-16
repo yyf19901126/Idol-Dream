@@ -197,15 +197,31 @@ function sfx(kind){
 }
 function updateSfxBtn(){const b=document.getElementById('sfxToggle');if(b){b.textContent=SFX_ON?'🔊':'🔇';b.classList.toggle('off',!SFX_ON);}}
 (function(){const b=document.getElementById('sfxToggle');if(b)b.onclick=()=>{audioInit();SFX_ON=!SFX_ON;updateSfxBtn();updateMusicGain();toast(SFX_ON?'🔊 音效开':'🔇 音效关');};})();
-/* ===== 背景音乐（程序生成·循环）：王道进行 F–G–Em–Am 的甜系 citypop 小循环（贝斯+柔铺底+琶音）===== */
+/* ===== 背景音乐（程序生成·循环）：每个改造阶段一首，曲风跟着主角"女性化心态弧线"走 ===== */
 let musicOn=true, _musTimer=null, _musNext=0, _musStep=0;
-const MUS_BPM=124, MUS_STEP=60/MUS_BPM/4, MUS_VOL=0.11;   // 16分音步长 / 音乐总音量（小声垫底）
-const MUS_SONG=[
-  {bass:87.31, ch:[349.23,440.00,523.25]},   // F  (F A C)
-  {bass:98.00, ch:[392.00,493.88,587.33]},   // G  (G B D)
-  {bass:82.41, ch:[329.63,392.00,493.88]},   // Em (E G B)
-  {bass:110.0, ch:[440.00,523.25,659.25]},   // Am (A C E)
+const MUS_VOL=0.11;   // 音乐总音量（小声垫底）
+/* 每首：bpm / 波形(贝斯bw·铺底pw·琶音aw) / 音量(bv·pv·av) / 琶音密度arpEvery / 琶音八度arpOct / 贝斯落点bassOn / 4小节和弦prog */
+const MUS_SONGS=[
+  /* 0 破旧小巷·落魄直男：慢、忧伤、稀疏（小调 Am-F-C-G） */
+  {bpm:84, bw:'triangle',pw:'sine',aw:'sine', bv:.5,pv:.14,av:.22, arpEvery:4,arpOct:2, bassOn:[0,8],
+   prog:[{b:110,c:[220,261.63,329.63]},{b:87.31,c:[174.61,220,261.63]},{b:65.41,c:[261.63,329.63,392]},{b:98,c:[196,246.94,293.66]}]},
+  /* 1 破旧健身房：冷峻、稳步推进（小调 Em-C-G-D，每拍贝斯） */
+  {bpm:104, bw:'triangle',pw:'sine',aw:'triangle', bv:.55,pv:.13,av:.26, arpEvery:2,arpOct:2, bassOn:[0,4,8,12],
+   prog:[{b:82.41,c:[164.81,196,246.94]},{b:65.41,c:[261.63,329.63,392]},{b:98,c:[196,246.94,293.66]},{b:73.42,c:[146.83,185,220]}]},
+  /* 2 大号KTV：欢快霓虹派对（大调 C-Am-F-G，密琶音） */
+  {bpm:126, bw:'triangle',pw:'sine',aw:'triangle', bv:.55,pv:.15,av:.30, arpEvery:2,arpOct:2, bassOn:[0,4,8,12],
+   prog:[{b:65.41,c:[261.63,329.63,392]},{b:110,c:[220,261.63,329.63]},{b:87.31,c:[174.61,220,261.63]},{b:98,c:[196,246.94,293.66]}]},
+  /* 3 改造实验室：赛博、冷酷下行（安达卢西亚 Am-G-F-E） */
+  {bpm:116, bw:'triangle',pw:'triangle',aw:'triangle', bv:.5,pv:.13,av:.28, arpEvery:2,arpOct:2, bassOn:[0,8],
+   prog:[{b:110,c:[220,261.63,329.63]},{b:98,c:[196,246.94,293.66]},{b:87.31,c:[174.61,220,261.63]},{b:82.41,c:[164.81,207.65,246.94]}]},
+  /* 4 少女闺房：甜系 J-pop 王道进行 F-G-Em-Am */
+  {bpm:120, bw:'triangle',pw:'sine',aw:'triangle', bv:.55,pv:.16,av:.30, arpEvery:2,arpOct:2, bassOn:[0,8],
+   prog:[{b:87.31,c:[349.23,440,523.25]},{b:98,c:[392,493.88,587.33]},{b:82.41,c:[329.63,392,493.88]},{b:110,c:[440,523.25,659.25]}]},
+  /* 5 舞台：明亮燃向偶像主题曲（大调 C-G-Am-F，每拍贝斯、16分密琶音） */
+  {bpm:134, bw:'triangle',pw:'sine',aw:'triangle', bv:.55,pv:.15,av:.32, arpEvery:1,arpOct:1, bassOn:[0,4,8,12],
+   prog:[{b:130.81,c:[523.25,659.25,783.99]},{b:196,c:[392,493.88,587.33]},{b:110,c:[440,523.25,659.25]},{b:87.31,c:[349.23,440,523.25]}]},
 ];
+function curMusStage(){return Math.min(5,(typeof P!=='undefined'&&P.mods)?P.mods.length:0);}
 function _mosc(freq,dur,type,vol,t0){          // 音乐专用振荡器（走 musicGain，柔和起音）
   if(!AC||!musicGain)return;
   const o=AC.createOscillator(),g=AC.createGain();
@@ -214,14 +230,15 @@ function _mosc(freq,dur,type,vol,t0){          // 音乐专用振荡器（走 mu
   o.connect(g); g.connect(musicGain); o.start(t0); o.stop(t0+dur+.04);
 }
 function _musStepFn(step,t){
-  const bar=Math.floor(step/16)%4, b=step%16, S=MUS_SONG[bar];
-  if(b===0||b===8) _mosc(S.bass,0.42,'triangle',0.55,t);                  // 贝斯：每小节 1、3 拍根音
-  if(b===0) S.ch.forEach(f=>_mosc(f,1.7,'sine',0.16,t));                  // 柔和铺底 pad（整小节）
-  if(b%2===0){const seq=[S.ch[0],S.ch[1],S.ch[2],S.ch[1]];_mosc(seq[(b/2)%4]*2,0.20,'triangle',0.30,t);}  // 琶音（高八度，plucky）
+  const S=MUS_SONGS[curMusStage()], bar=Math.floor(step/16)%4, b=step%16, C=S.prog[bar];
+  if(S.bassOn.indexOf(b)>=0) _mosc(C.b,0.42,S.bw,S.bv,t);                 // 贝斯落点
+  if(b===0) C.c.forEach(f=>_mosc(f,1.7,S.pw,S.pv,t));                     // 整小节铺底 pad
+  if(b%S.arpEvery===0){const seq=[C.c[0],C.c[1],C.c[2],C.c[1]];_mosc(seq[Math.floor(b/S.arpEvery)%4]*S.arpOct,0.2,S.aw,S.av,t);}  // 琶音
 }
 function _musTick(){
   if(!AC||AC.state!=='running'){_musNext=AC?AC.currentTime+0.1:0;return;}  // 后台挂起时不抢拍
-  while(_musNext<AC.currentTime+0.12){_musStepFn(_musStep,_musNext);_musNext+=MUS_STEP;_musStep=(_musStep+1)%64;}
+  const stepDur=60/MUS_SONGS[curMusStage()].bpm/4;                         // 步长随当前阶段曲速
+  while(_musNext<AC.currentTime+0.12){_musStepFn(_musStep,_musNext);_musNext+=stepDur;_musStep=(_musStep+1)%64;}
 }
 function startMusic(){ if(!AC||_musTimer)return; _musStep=0;_musNext=AC.currentTime+0.12; _musTimer=setInterval(_musTick,25); updateMusicGain(); }
 function stopMusic(){ if(_musTimer){clearInterval(_musTimer);_musTimer=null;} }
@@ -1555,14 +1572,10 @@ function render(){
       ctx.drawImage(HOLO,c.x-w/2,c.y-h+6,w,h);ctx.restore();
     }else drawSummon(ctx,c.x,c.y-14+bob,u);
   });
-  /* 实体（按 y 排序） */
+  /* 敌人（按 y 排序）；玩家不在此画——放到子弹之后，保证子弹再多也不挡住操作角色 */
   const ents=G.enemies.map(e=>({y:e.y,e}));
-  ents.push({y:P.y,player:1});
   ents.sort((a,b)=>a.y-b.y);
-  ents.forEach(o=>{
-    if(o.player)drawPlayer();
-    else drawEnemy(o.e);
-  });
+  ents.forEach(o=>drawEnemy(o.e));
   /* 反光板 */
   P.weapons.filter(w=>w.id==='mirror').forEach(w=>{
     const n=Math.min(w.lvl,3),rr=74*(1+ST().range*.5);
@@ -1589,6 +1602,7 @@ function render(){
     ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.globalAlpha=.55;ctx.beginPath();ctx.arc(b.x,b.y,b.r*.4,0,7);ctx.fill();
     ctx.restore();
   });
+  drawPlayer();                                          // 玩家画在所有子弹之上（永远清晰可见）
   /* 特效 */
   G.fx.forEach(f=>{
     const k=f.t/f.ttl;
@@ -1732,8 +1746,29 @@ function drawEnemy(e){
     ctx.fillStyle='#241126';ctx.font='bold 13px sans-serif';ctx.fillText('还钱！！',e.x+24,e.y-76);
   }
 }
+const WEAPON_ICON={}, WICONLOAD={};                       // 环绕武器用的图标缓存（art/icons/weapons/<id>.png）
+function wIcon(id){
+  if(id in WEAPON_ICON)return WEAPON_ICON[id];
+  if(!WICONLOAD[id]){WICONLOAD[id]=1;const im=new Image();im.onload=()=>{if(im.width)WEAPON_ICON[id]=im;};im.onerror=()=>WEAPON_ICON[id]=null;im.src='art/icons/weapons/'+id+'.png';}
+  return undefined;
+}
+function drawOrbitWeapons(){                               // 佩戴武器环绕角色（椭圆轨道，缓慢旋转）
+  const ws=P.weapons.filter(w=>w.id!=='mirror');          // 反光板自带环绕，跳过
+  const n=ws.length; if(!n)return;
+  const cy=P.y-22, rrx=34, rry=21, t=performance.now()/1000, sz=18;
+  for(let i=0;i<n;i++){
+    const a=t*0.7 + i*Math.PI*2/n;
+    const ox=P.x+Math.cos(a)*rrx, oy=cy+Math.sin(a)*rry;
+    const col=(WEAPONS[ws[i].id]&&WEAPONS[ws[i].id].col)||'#fff', im=wIcon(ws[i].id);
+    ctx.save();ctx.shadowColor=col;ctx.shadowBlur=6;
+    if(im&&im.width){const h=sz,w=im.width*h/im.height;ctx.imageSmoothingEnabled=false;ctx.drawImage(im,Math.round(ox-w/2),Math.round(oy-h/2),Math.round(w),h);}
+    else{ctx.fillStyle=col;ctx.beginPath();ctx.arc(ox,oy,4.5,0,7);ctx.fill();}   // 图标未加载→小圆点回退
+    ctx.restore();
+  }
+}
 function drawPlayer(){
   drawChibi(ctx,P.x,P.y,P.mods,{face:P.face,moving:P.moving,run:P.bob,t:performance.now()/1000,hit:P.hitFlash||0});
+  drawOrbitWeapons();
   /* 热度条（元气流） */
   if(P.mods[3]==='Y'&&P.heat>0){
     ctx.fillStyle='#241c33';ctx.fillRect(P.x-20,P.y-48,40,4);

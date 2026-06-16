@@ -118,7 +118,7 @@ function drawChibi(g,x,y,mods,o){
   const key=mods.join('')||'_';
   const im=getChibiImg(key);
   if(im&&im.width){                                       // 用 GPT 的 Q版图 + 果冻 squash-stretch 走路
-    const TH=76,sc=TH/im.height,tw=im.width*sc;            // 操作角色高度（战斗区扩大后整体放大一倍）
+    const TH=64,sc=TH/im.height,tw=im.width*sc;            // 操作角色高度（略缩小，给环绕武器留空间）
     const moving=o.moving,ph=o.run||0;
     let sx=1,sy=1,hop;
     if(moving){                                          // a:0着地→1腾空；着地横向压扁、腾空竖向拉伸（体积守恒）
