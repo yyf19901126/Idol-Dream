@@ -52,7 +52,7 @@ const ENEMY_IMG={};
 const G={
   scr:'start',          // start play modal over win
   wave:0,waveT:0,waveDur:0,spawnAcc:0,elSched:[],
-  enemies:[],bullets:[],ebullets:[],drops:[],zones:[],clones:[],fx:[],floats:[],
+  enemies:[],bullets:[],ebullets:[],drops:[],zones:[],clones:[],fx:[],floats:[],allies:[],fields:[],
   gold:0,kills:0,giftN:0,totalGold:0,
   xp:0,level:1,xpNext:10,queuedLv:0,
   noHit:true,shake:0,tIncome:0,bossRef:null,
@@ -79,16 +79,23 @@ function ST(){
   let aspd=A('aspd'), crit=.03+A('crit'), range=A('range'), armor=A('armor'), dodge=A('dodge');
   let speed=1+A('speed'), luck=A('luck'), harvest=A('harvest'),
       xp=A('xp')+(s.xp||0), gold=A('gold')+(s.gold||0);
+  const _b=(P._skT>0&&P.activeSkill&&P.activeSkill.buff)||{};   // 释放中的主动技 buff
   if(m.length===0)speed*=.82;                       // 原点大叔慢
-  if(m[0]==='L'){speed+=.15;dodge+=.10;maxhp*=.85;}
-  if(m[0]==='H'){maxhp*=1.20;speed-=.08;dmgMelee+=.15;}
-  if(m[1]==='S')aspd+=.10;
-  if(m[1]==='D')range+=.15;
-  if(m[2]==='C')engi+=.20;
-  if(m[2]==='B'){regen+=1;xp+=.10;}
-  if(m[3]==='Y')aspd+=Math.min(P.heat,50)*.006;
-  if(m[3]==='N')crit+=.10;
+  if(m[0]==='L'){speed+=.18;dodge+=.12;maxhp*=.82;}                 // ① 轻盈
+  if(m[0]==='H'){maxhp*=1.25;speed-=.06;dmgMelee+=.18;}             // ① 重核
+  if(m[1]==='S')aspd+=.15;                                           // ② 甜嗓：攻速（+1穿透见下）
+  if(m[1]==='D')range+=.18;                                          // ② 磁嗓：范围（震慑波在 killEnemy）
+  if(m[2]==='C')dmg+=.20;                                            // ③ 义体过载：全武器+20%（充能在 fireWeapon）
+  if(m[2]==='B'){regen+=1.2;xp+=.12;dmg+=Math.min(8,(P._bio||0))*.04;}  // ③ 生体：无伤叠层(≤+32%)
+  if(m[3]==='Y')dmg+=Math.min(P.heat,100)/100*.30;                  // ④ 元气：热度增伤(≤+30%)
+  const nCrit=(m[3]==='N')?.25:0;                                    // ④ 冷艳：暴击区
+  if(m[3]==='N')crit+=.12;
   if(m[4]==='T')gold+=.25;
+  if(P.passiveSkill&&P.passiveSkill.dmgFn)dmg+=P.passiveSkill.dmgFn(Math.round(Math.max(1,maxhp)));  // 丧系/午夜动态增伤
+  if(P._grpFix)dmgMelee+=P._grpFix; if(P._eatFix)dmgMelee+=P._eatFix;                                 // 健身/干饭固化
+  if(P._allBuff>0){dmg+=.05;aspd+=.05;}                             // 居酒屋·敬一杯
+  if(_b.spd)speed+=_b.spd; if(_b.aspd)aspd+=_b.aspd; if(_b.dmg)dmg+=_b.dmg; if(_b.crit)crit+=_b.crit;
+  if(_b.armor)armor+=_b.armor; if(_b.range)range+=_b.range;
   if(A('noLifesteal'))lifesteal=0;                  // 共生菌株代价
   if(A('hpScale'))maxhp*=A('hpScale');
   return{
@@ -96,9 +103,9 @@ function ST(){
     dmg, dmgMelee, dmgRanged, dmgElem, engi,
     aspd, crit:Math.min(1,crit), range, armor, dodge:Math.min(.6,dodge),
     speed, luck, harvest, xp, gold,
-    critMult:Math.min(3.0,1.8+A('critMult')), pickup:200+A('pickup'),
-    bounce:A('bounce'),pierce:A('pierce'),multishot:A('multishot'),split:A('split'),
-    homing:A('homing'),orbit:A('orbit'),chain:A('chain'),knockback:A('knockback'),
+    critMult:Math.min(3.0,1.8+A('critMult')+nCrit), pickup:200+A('pickup'),
+    bounce:A('bounce'),pierce:A('pierce')+(m[1]==='S'?1:0)+(_b.pierce||0),multishot:A('multishot')+(_b.multishot||0),split:A('split'),
+    homing:A('homing')+(_b.homing||0),orbit:A('orbit'),chain:A('chain'),knockback:A('knockback'),
     projSpd:1+A('projSpd'),projSize:1+A('projSize'),procLuck:A('procLuck'),
     burn:A('burn'),shock:A('shock'),poison:A('poison'),chill:A('chill'),vuln:A('vuln'),statusVuln:A('statusVuln'),
   };
@@ -310,7 +317,7 @@ function startCutscene(key){
   const code=P.mods.join('')+key;                 // 选完后的完整形态码（如 L / LS / LSCYP）
   const sc=(typeof CUTSCENES!=='undefined'&&CUTSCENES[code])||((typeof MOD_SCENES!=='undefined')?MOD_SCENES[key]:null);
   $('overlay').classList.remove('show');
-  if(!sc){P.mods.push(key);P.hp=Math.min(P.hp,ST().maxhp);$('formLab').textContent=playerForm(P.mods).name;nextModal();return;}
+  if(!sc){P.mods.push(key);P.hp=Math.min(P.hp,ST().maxhp);if(P.mods.length===5)grantFormSkill();$('formLab').textContent=playerForm(P.mods).name;nextModal();return;}
   G.scr='cut';
   cutscene={key,t:0,revealed:false,act:sc.act,mirror:sc.mirror};
 }
@@ -332,6 +339,7 @@ function startWave(w){
   G.wave=w;G.waveT=0;G.waveDur=bossW?999:Math.min(Math.round(23+1.7*w),60);   // §07 v0.3.3 波时长拉长(w19=55s)，无尽封顶60s
   G.bossW=bossW;
   G.spawnAcc=0;G.noHit=true;G.elSched=[];
+  P._sisUsed=0;P._gloomUsed=0;                       // 技能·每波首次类重置
   P._cashBuff=A('cashReaction')?Math.floor((P._shopSpend||0)/100)*0.08:0;P._shopSpend=0;  // 钞能力反应：上一轮商店消费→本波全伤
   if(w===1)G.miniBossSeen=false;                       // 本局 mini-boss 保底标记
   const elite=(t,type)=>{const nm=type==='leping'?'毒舌乐评人':'黑粉头目';G.elSched.push({t:Math.max(0,t-2),warnOnly:1,msg:'⚡'+nm+'空降直播间！'});G.elSched.push({t,type});};
@@ -369,7 +377,9 @@ function startWave(w){
 function endWave(){
   emit('onWaveEnd',{});P._brave=0;P._cashBuff=0;   // 越战越勇/钞能力反应波末清零
   if(G.drops.length)toast('本波有 '+G.drops.length+' 份打赏没捡，浪费了！');  // 没捡的打赏不再自动收，作废
-  G.drops=[];G.enemies=[];G.ebullets=[];G.bullets=[];G.zones=[];G.clones=[];
+  G.drops=[];G.enemies=[];G.ebullets=[];G.bullets=[];G.zones=[];G.clones=[];G.allies=[];G.fields=[];
+  P._skT=0;P._convWin=0;P._moshT=0;P._hype=0;                          // 波末清掉技能临时态（永久陪伴分身在 grant，已清，需重挂）
+  if(P.passiveSkill&&P.passiveSkill.grant)P.passiveSkill.grant();      // 重挂永久陪伴（如青梅分身）
   if(P.mods[2]==='B'&&G.noHit){G.gold+=18;G.totalGold+=18;toast('无伤波次！观众追加打赏 +18');}
   const salary=8+G.wave*3+Math.floor(ST().harvest);   // 时薪 + 恰饭
   G.gold+=salary;G.totalGold+=salary;
@@ -801,6 +811,7 @@ function hurtEnemy(e,dmg,isCrit,opt){
   if(e.slow>0&&A('coldSnap'))dmg*=1.3;               // 趁你冷场：对冰冷敌+30%
   if(isCrit&&e.poison>0&&A('dramaLord'))dmg*=(1+Math.min(.4,(e.poisonStk||1)*.04));  // 节奏带师：中毒层数→暴伤
   if(isCrit&&P._critBonus){dmg*=(1+P._critBonus);P._critBonus=0;}                    // 名场面收割：下击暴伤+
+  if(e.boozed>0){dmg*=2;e.boozed=0;}                  // 午夜威士忌：上头敌下一击翻倍
   dmg=Math.round(Math.max(1,dmg));
   const willKill=e.hp-dmg<=0;
   e.hp-=dmg;e.hitFlash=isCrit?.20:.13;e.hitPop=Math.max(e.hitPop||0,isCrit?1:.65);   // 命中白闪 + 缩放弹（drawEnemy 读取）
@@ -839,7 +850,11 @@ function hurtEnemy(e,dmg,isCrit,opt){
   }
   if(opt.knockback&&!e.boss){const a=Math.atan2(e.y-P.y,e.x-P.x);e.x+=Math.cos(a)*opt.knockback*0.1;e.y+=Math.sin(a)*opt.knockback*0.1;}
   if(st.lifesteal>0)P.hp=Math.min(st.maxhp,P.hp+dmg*st.lifesteal);   // 回魂
-  if(!opt.noTrig){emit('onHit',{e,dmg,isCrit});if(isCrit){if(P.mods[3]==='N')e.mark=3;emit('onCrit',{e,dmg});
+  if(!opt.noTrig){emit('onHit',{e,dmg,isCrit});
+    if(P.mods[2]==='C'){P._charge=Math.min(100,(P._charge||0)+10);if(P._charge>=100){P._charge=0;P._overload=1;}}  // ③ 义体过载充能
+    if(P._hype>0)skAOE(e.x,e.y,50,skHit('melee',.4),{col:'#ffd24a'});                                            // ④ 元气·全场嗨溅射
+    if(P.passiveSkill&&P.passiveSkill.onHit)P.passiveSkill.onHit(e,dmg,isCrit);
+    if(isCrit){if(P.mods[3]==='N')e.mark=3;emit('onCrit',{e,dmg});if(P.passiveSkill&&P.passiveSkill.onCrit)P.passiveSkill.onCrit(e);
     if(A('spotlight')){P._spot=(P._spot||0)+1;if(P._spot>=8){P._spot=0;explodeAt(e.x,e.y,80,dmg*1.4*(1+st.dmgElem));float(e.x,e.y-e.r,'高光!','#ffd24a');}}}}  // 高光时刻
   if(isCrit&&e.hp<=0){                                // 暴击击杀协同（收割/心动传染）
     if(A('highlightReap')){P.hp=Math.min(st.maxhp,P.hp+1);P._critBonus=.15;if(P.mods[4]==='P')P.skillCd=Math.max(0,P.skillCd-.5);}
@@ -856,12 +871,15 @@ function killEnemy(e){
   fx({type:'ring',x:kx,y:ky,r:34*big,col:e.boss?'#ffd24a':'#ff9ec4',ttl:.34});
   fx({type:'spark',x:kx,y:ky,ttl:.26});
   addShake(2.6*big); hitStop(e.boss?.07:.04); sfx(e.boss?'boss':'kill');
-  if(P.mods[3]==='Y')P.heat=Math.min(50,P.heat+1);
-  if(P.mods[3]==='Y')P.heat=Math.min(50,P.heat+1);
-  if(P.mods[1]==='D'&&Math.random()<.10){
-    G.enemies.forEach(o=>{if(!o.dead&&dist2(o,e)<8100)o.slow=1.5;});
-    fx({type:'ring',x:e.x,y:e.y,r:90,col:'#9b6bff',ttl:.4});
+  if(P.mods[3]==='Y'){P.heat=Math.min(100,P.heat+4);if(P.heat>=100&&P._hype<=0)P._hype=5;}  // ④ 元气：连杀+4热度，满→全场嗨
+  if(P.mods[3]==='N'&&e.mark>0)spreadMark(e,1);        // ④ 冷艳：心动死亡传染最近1
+  if(P.mods[1]==='D'){                                 // ② 磁嗓：击杀震慑波（死亡可再触发，连锁≤3）
+    const dep=e._dStun||0, p=dep===0?.15:.15/Math.pow(2,dep);
+    if(dep<3&&Math.random()<p){fx({type:'ring',x:e.x,y:e.y,r:90,col:'#9b6bff',ttl:.4});
+      G.enemies.forEach(o=>{if(!o.dead&&!o.ally&&dist2(o,e)<8100){o.slow=Math.max(o.slow,2);o._dStun=dep+1;}});}
   }
+  if(P._convWin>0&&!e.boss&&G.allies.length<8)convertAlly(e,.15,5);            // 出道曲：窗口内击杀转友
+  if(P.passiveSkill&&P.passiveSkill.onKill)P.passiveSkill.onKill(e);
   /* explode 机制位（带 0.5s ICD，§4.5） */
   const ex=A('explode');
   if(ex&&ex.r&&(P._explodeCd||0)<=0){P._explodeCd=0.5;explodeAt(e.x,e.y,ex.r,(25+G.wave*4)*ex.dmg*(1+(_st?_st.dmgElem:0)));}
@@ -911,6 +929,8 @@ function debutClear(){                                  // §1.1 出道收口（
 function hitPlayer(dmg){
   if(G.god||P.ift>0)return;
   const st=ST();
+  if(P.passiveSkill&&P.passiveSkill.onGuard&&(P._guardCd||0)<=0){     // 保镖女神：自动格挡反弹（ICD1.5s）
+    P._guardCd=1.5;P.ift=.5;float(P.x,P.y-70,'格挡!','#8fd0ff');P.passiveSkill.onGuard();return;}
   if(Math.random()<st.dodge){float(P.x,P.y-70,'闪避!','#7af0ea');emit('onDodge',{});return;}
   if((P._shield||0)>0){P._shield--;P.ift=.5;float(P.x,P.y-70,'护盾!','#9fd0ff');return;}
   emit('onHurt',{dmg});
@@ -929,21 +949,110 @@ function hitPlayer(dmg){
 }
 
 /* ---------- 主动技 ---------- */
+/* ========== 05 · 专属技能 / 改造轴技能系统 ========== */
+/* 伤害参照：大爆发≈清屏一发(58+wave×6)，单次命中按对应面板缩放（§7.1 纪律） */
+function skBurst(mul){const st=_st||ST();return (58+G.wave*6)*(1+st.dmg)*(mul||1);}
+function skHit(cat,mul){const st=_st||ST();const c=cat==='melee'?st.dmgMelee:cat==='ranged'?st.dmgRanged:cat==='elem'?st.dmgElem:cat==='engi'?st.engi:0;return (11+G.wave*4)*(1+st.dmg+c)*(mul||1);}
+function panelCrit(){const st=_st||ST();return {c:Math.random()<st.crit,cm:st.critMult};}
+function skField(x,y,r,ttl,o){G.fields.push(Object.assign({x,y,r,ttl,t:0},o||{}));}
+function skAOE(x,y,r,dmg,o){o=o||{};fx({type:'ring',x,y,r,col:o.col||'#ff9ec4',ttl:.34});if(o.shake)addShake(o.shake);
+  G.enemies.forEach(e=>{if(e.dead||e.ally||dist2(e,{x,y})>r*r)return;
+    hurtEnemy(e,dmg,o.crit||false,{noTrig:1,noFx:1,sx:x,sy:y,chill:o.chill,burn:o.burn,vuln:o.vuln});
+    if(o.knock&&!e.boss){const a=Math.atan2(e.y-y,e.x-x);e.x+=Math.cos(a)*o.knock;e.y+=Math.sin(a)*o.knock;}
+    if(o.stun)e.stun=Math.max(e.stun||0,o.stun); if(o.fear&&!e.boss)e.fear=Math.max(e.fear||0,o.fear);
+    if(o.ally&&!e.boss&&G.allies.length<10&&Math.random()<(o.ally.p||1))convertAlly(e,o.ally.pct,o.ally.ttl);});}
+function convertAlly(e,pct,ttl){if(!e||e.boss||e.ally)return;e.dead=true;G.allies.push({x:e.x,y:e.y,r:e.r,spr:e.spr,type:e.type,tex:e.tex,ttl:ttl||5,cd:rnd(.2,.6),pct:pct||0.15,gait:rnd(0,6.28)});fx({type:'ring',x:e.x,y:e.y,r:24,col:'#7af0ea',ttl:.3});}
+function playerDash(ang,dist,dur){dur=dur||.18;P._dashT=dur;P._dashVx=Math.cos(ang)*dist/dur;P._dashVy=Math.sin(ang)*dist/dur;P.ift=Math.max(P.ift,dur+.05);}
+function freezeAll(t){G.enemies.forEach(e=>{if(!e.dead&&!e.ally){e.stun=Math.max(e.stun||0,t);e.frozen=t;}});}
+function volley(n,cat,mul,col){const ts=nearestN(900,n);for(let i=0;i<n;i++){const tg=ts[i]||ts[0];if(!tg)return;const a=Math.atan2(tg.y-(P.y-20),tg.x-P.x),pc=panelCrit();
+  G.bullets.push({x:P.x,y:P.y-20,vx:Math.cos(a)*300,vy:Math.sin(a)*300,dmg:skHit(cat,mul),crit:pc.c,cm:pc.cm,pierce:0,pdec:1,bounce:0,split:0,homing:1.4,chain:0,ttl:2.2,r:8,col:col||'#7af0ea',kind:'starnote',status:{},hit:new Set()});}}
+function spreadMark(from,n){let c=0;G.enemies.forEach(e=>{if(e.dead||e.ally||e===from||c>=n)return;if(dist2(e,from)<140*140){e.mark=Math.max(e.mark||0,3);c++;}});}
+
+/* —— 32 形态专属技能（§7）。type: active主动·绑空格 / passive被动 / weapon专属武器 —— */
+const SKILLS={
+ /* 轻甜系 L-S */
+ LSCYP:{type:'active',name:'全息天使降临',cd:22,dur:8,col:'#9af0ff',buff:{spd:.30,homing:.8,multishot:2},every:.35,
+   tick(){skField(P.x,P.y,38,1.1,{burn:skHit('elem',.5),col:'#ffb14a'});}},
+ LSCYT:{type:'passive',name:'电波接收',onKill(){P._wv=(P._wv||0)+1;if(P._wv>=10){P._wv=0;volley(4,'ranged',1.0,'#9af0ff');}}},
+ LSCNP:{type:'active',name:'人偶剧场',cd:20,col:'#c8a8ff',on(){for(let i=0;i<4;i++)G.clones.push({x:P.x+Math.cos(i*1.57)*44,y:P.y-10+Math.sin(i*1.57)*30,ttl:6,cd:rnd(0,.6),dmg:skHit('ranged',.6),lvl:2,holo:1,crit:1,cm:ST().critMult,status:{},unit:'ai',kind:'aiCohost',bob:rnd(0,6)});}},
+ LSCNT:{type:'passive',name:'反差暴击',onHit(e){if(Math.random()<.25)skAOE(e.x,e.y,60,skHit('ranged',1.6),{crit:true,col:'#9b6bff'});}},
+ LSBYP:{type:'active',name:'出道曲·上热搜',cd:24,col:'#ff9ec4',on(){P._convWin=4;danmaku('一曲出道，路人秒变应援军团！','sys');}},
+ LSBYT:{type:'passive',name:'全网妹妹',onPickup(){P.hp=Math.min(ST().maxhp,P.hp+1);},tick(){if(P.hp<ST().maxhp*.30&&!P._sisUsed){P._sisUsed=1;skAOE(P.x,P.y,420,skHit('melee',.5),{knock:70,col:'#ff9ec4',shake:8});danmaku('全网心疼·清场！','sys');}}},
+ LSBNP:{type:'active',name:'绝对零度',cd:22,col:'#aee8ff',on(){freezeAll(3.5);fx({type:'flash',ttl:.3,col:'#aee8ff'});addShake(7);}},
+ LSBNT:{type:'passive',name:'读信电台',every:8,tick(){skField(P.x,P.y,110,4,{heal:2,slow:1,col:'#aee8ff'});}},
+ /* 轻磁系 L-D */
+ LDCYP:{type:'active',name:'台风炸裂',cd:22,dur:8,col:'#ffd24a',buff:{aspd:.25},every:2,tick(){const t=nearestEnemy(900);if(t)skAOE(t.x,t.y,120,skBurst(.6),{chill:1,col:'#ffd24a',shake:5});}},
+ LDCYT:{type:'weapon',name:'义体百宝臂',weapon:'memeCannon'},
+ LDCNP:{type:'active',name:'赛博低音',cd:23,dur:5,col:'#9b6bff',buff:{crit:.15},on(){skField(P.x,P.y,150,5,{slow:1,col:'#9b6bff'});skAOE(P.x,P.y,150,skBurst(.3),{col:'#9b6bff',shake:6});}},
+ LDCNT:{type:'passive',name:'ASMR单推',every:.5,tick(){const t=nearestEnemy(500);if(t)t.asmr=2;},onKill(e){if(e.asmr>0)skAOE(e.x,e.y,70,skHit('ranged',.5),{shock:1,col:'#9b6bff'});}},
+ LDBYP:{type:'active',name:'殿下接你回家',cd:20,col:'#ffe07a',on(){const t=nearestEnemy(420),a=t?Math.atan2(t.y-P.y,t.x-P.x):(P.face>0?0:Math.PI);playerDash(a,200,.2);P._dashAOE={a,n:.16};}},
+ LDBYT:{type:'passive',name:'青梅陪伴',grant(){G.clones.push({x:P.x-34,y:P.y,ttl:1e9,cd:0,dmg:skHit('ranged',.25),lvl:2,holo:1,crit:0,cm:ST().critMult,status:{},unit:'ai',kind:'aiCohost',bob:0,sister:1});},tick(){if(P.hp<ST().maxhp*.30&&!P._sisGuard){P._sisGuard=1;P._shield=Math.max(P._shield||0,2);}else if(P.hp>=ST().maxhp*.30)P._sisGuard=0;}},
+ LDBNP:{type:'active',name:'慵懒即兴',cd:22,dur:8,col:'#9af07a',every:.4,tick(){const es=G.enemies.filter(e=>!e.dead&&!e.ally);if(!es.length)return;const t=pick(es),a=Math.atan2(t.y-(P.y-20),t.x-P.x);G.bullets.push({x:P.x,y:P.y-20,vx:Math.cos(a)*340,vy:Math.sin(a)*340,dmg:skHit('ranged',1.2),crit:true,cm:ST().critMult,pierce:0,pdec:1,bounce:0,split:0,homing:2,chain:0,ttl:1.6,r:8,col:'#9af07a',kind:'starnote',status:{},hit:new Set()});}},
+ LDBNT:{type:'passive',name:'今天也辛苦了',dmgFn(maxhp){const miss=Math.max(0,1-P.hp/maxhp);return Math.min(.4,Math.floor(miss*10)*0.08);},tick(){if(P.hp<ST().maxhp*.25&&!P._gloomUsed){P._gloomUsed=1;skAOE(P.x,P.y,420,skHit('melee',.5),{knock:70,col:'#7a7a9a',shake:8});P.hp=Math.min(ST().maxhp,P.hp+20);}}},
+ /* 重甜系 H-S */
+ HSCYP:{type:'active',name:'应援全开',cd:22,dur:8,col:'#7af0ea',buff:{armor:3},on(){P._cheer=8;},end(){P._cheer=0;}},
+ HSCYT:{type:'passive',name:'再来一组☆',onKill(){P._grpK=(P._grpK||0)+1;P._grpT=5;if(P._grpK>=20){P._grpK=0;P._grpFix=Math.min(.30,(P._grpFix||0)+.02);}},tick(){P._grpT=Math.max(0,(P._grpT||0)-1);if(P._grpT<=0)P._grpK=0;},dmgFn(){return 0;}},
+ HSCNP:{type:'active',name:'战姬展翼',cd:24,dur:8,col:'#bfe0ff',buff:{spd:.25,fly:1},repress(){const t=nearestEnemy(500),a=t?Math.atan2(t.y-P.y,t.x-P.x):0;playerDash(a,180,.18);P._dashAOE={a,n:.25,r:110};P._skT=Math.min(P._skT,.05);}},
+ HSCNT:{type:'passive',name:'贴身护卫',onGuard(){skAOE(P.x,P.y,90,skHit('melee',1.5),{crit:true,col:'#8fd0ff'});}},
+ HSBYP:{type:'active',name:'盛夏狂欢',cd:22,dur:6,col:'#ffe07a',every:.5,on(){P._ballA=rnd(0,6.28);},tick(){G.enemies.forEach(e=>{if(!e.dead&&!e.ally){e.burn=Math.max(e.burn||0,1.5);e.burnDps=Math.max(e.burnDps||0,skHit('elem',.5));}});const t=nearestEnemy(900);if(t)skAOE(t.x,t.y,70,skHit('elem',1.8),{col:'#ffd24a'});}},
+ HSBYT:{type:'passive',name:'大胃王',onPickup(){P._eat=(P._eat||0)+1;P._eatFix=Math.min(.30,(P._eat)*0.01);if(P._eat%10===0)skAOE(P.x,P.y,140,skHit('melee',3),{knock:40,col:'#ffd24a',shake:5});},dmgFn(){return 0;}},
+ HSBNP:{type:'active',name:'T台压场',cd:20,dur:5,col:'#ff7bc1',buff:{crit:.15},on(){skField(P.x,P.y,150,5,{slow:1,vuln:.30,col:'#ff7bc1'});}},
+ HSBNT:{type:'passive',name:'优雅下午茶',every:.5,tick(){/* 常驻领域刷新（见 grant 持续场）*/G.fields.find(f=>f.tea)||skField(P.x,P.y,140,1e9,{slow:1,tea:1,col:'#e0b0ff'});const f=G.fields.find(f=>f.tea);if(f){f.x=P.x;f.y=P.y;f.t=0;}},onKill(e){if(dist2(e,P)<140*140){G.gold+=2;G.totalGold+=2;}}},
+ /* 重磁系 H-D */
+ HDCYP:{type:'active',name:'舞台喷火',cd:23,dur:8,col:'#ff7a3a',buff:{aspd:.20},every:.25,tick(){const a=P.face>0?0:Math.PI;for(let i=-1;i<=1;i++){const aa=a+i*0.5,d=rnd(60,200);const x=P.x+Math.cos(aa)*d,y=P.y-20+Math.sin(aa)*d;G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,{x,y})<2000){e.burn=Math.max(e.burn||0,1.5);e.burnDps=Math.max(e.burnDps||0,skHit('elem',.6));}});fx({type:'burst',x,y,n:2,spd:80,ttl:.3,col:'#ff7a3a'});}}},
+ HDCYT:{type:'weapon',name:'机车炮台',weapon:'camTurret'},
+ HDCNP:{type:'active',name:'歌剧魅影',cd:24,dur:3,col:'#9b6bff',buff:{spd:.20,stealth:1},end(){const t=nearestEnemy(500),x=t?t.x:P.x,y=t?t.y:P.y;skAOE(x,y,100,skHit('ranged',3),{crit:true,fear:1.5,col:'#9b6bff',shake:7});}},
+ HDCNT:{type:'passive',name:'一键入侵',onKill(e){if(Math.random()<.30){let n=null,bd=200*200;G.enemies.forEach(o=>{if(o.dead||o.ally)return;const d=dist2(o,e);if(d<bd){bd=d;n=o;}});if(n)convertAlly(n,.2,5);}}},
+ HDBYP:{type:'active',name:'全场跳起来',cd:22,dur:6,col:'#ff5a7a',on(){P._moshT=6;danmaku('全场蹦迪，互撞起来！','sys');}},
+ HDBYT:{type:'passive',name:'人生咨询室',onGold(){if((P._toastCd||0)<=0){P._toastCd=3;P.hp=Math.min(ST().maxhp,P.hp+2);P._allBuff=3;}}},
+ HDBNP:{type:'active',name:'至暗独舞',cd:22,dur:2,col:'#6a6a8a',buff:{noContact:1},on(){skAOE(P.x,P.y,160,skHit('melee',.4),{stun:2,vuln:.30,col:'#6a6a8a',shake:6});}},
+ HDBNT:{type:'passive',name:'深夜醺然',dmgFn(){return Math.min(.4,G.wave*0.015);},onCrit(e){e.boozed=2;}},
+};
+
+function grantFormSkill(){
+  const code=P.mods.join(''); const sk=SKILLS[code]; if(!sk)return;
+  P.activeSkill=null; P.passiveSkill=null;
+  if(sk.type==='active'){P.activeSkill=sk;P.skillCd=0;}
+  else if(sk.type==='passive'){P.passiveSkill=sk;if(sk.grant)sk.grant();}
+  else if(sk.type==='weapon'){const have=P.weapons.find(w=>w.id===sk.weapon);if(have)have.lvl=Math.min(4,have.lvl+1);else if(P.weapons.length<WEAPON_MAX)P.weapons.push({id:sk.weapon,lvl:2,cd:0});else{P._pendWeapon=sk.weapon;toast('武器槽满！卖一把可换上「'+sk.name+'」');}}
+  const tn={active:'主动·空格',passive:'被动',weapon:'专属武器'}[sk.type];
+  setTimeout(()=>danmaku('✨ 解锁专属技能：'+sk.name+'（'+tn+'）','sys'),300);
+}
 function castSkill(){
-  if(G.scr!=='play'||P.mods[4]!=='P'||P.skillCd>0)return;
-  P.skillCd=22*(A('automation')?.75:1);            // 自动化营业：主动技 CD -25%
-  const dmg=(60+G.wave*6)*(1+ST().dmg);
-  fx({type:'ring',x:P.x,y:P.y,r:280,col:'#ff7bc1',ttl:.6});
-  fx({type:'flash',ttl:.25,col:'#ff9ec4'});
-  addShake(10); hitStop(.08); sfx('skill');
-  G.enemies.forEach(e=>{
-    if(e.dead)return;
-    if(dist2(e,P)<78400){
-      hurtEnemy(e,dmg,Math.random()<ST().crit);
-      if(!e.boss){const a=Math.atan2(e.y-P.y,e.x-P.x);e.x+=Math.cos(a)*70;e.y+=Math.sin(a)*70;e.stun=1;}
-    }
-  });
-  danmaku('开！场！表！演！','sys');G.shake=8;
+  const sk=P.activeSkill; if(G.scr!=='play'||!sk)return;
+  if(P._skT>0){ if(sk.repress)sk.repress(); return; }   // 二段（俯冲等）
+  if(P.skillCd>0)return;
+  P.skillCd=sk.cd*(A('automation')?.75:1);
+  if(sk.dur){P._skT=sk.dur;P._skTick=0;}
+  fx({type:'ring',x:P.x,y:P.y,r:180,col:sk.col||'#ff7bc1',ttl:.5}); fx({type:'flash',ttl:.18,col:sk.col||'#ff9ec4'});
+  addShake(8); hitStop(.06); sfx('skill'); danmaku('技能·'+sk.name+'！','sys');
+  if(sk.on)sk.on();
+}
+/* 技能/buff/领域/友军/mosh/dash 每帧推进 */
+function skTick(dt){
+  if(P._skT>0){const sk=P.activeSkill;P._skT-=dt;if(sk&&sk.tick){P._skTick=(P._skTick||0)+dt;const ev=sk.every||.5;while(P._skTick>=ev){P._skTick-=ev;sk.tick();}}if(P._skT<=0&&sk&&sk.end)sk.end();}
+  if(P.passiveSkill&&P.passiveSkill.tick){P._pasTick=(P._pasTick||0)+dt;const iv=P.passiveSkill.every||1;while(P._pasTick>=iv){P._pasTick-=iv;P.passiveSkill.tick();}}
+  P._moshT=Math.max(0,(P._moshT||0)-dt);P._hype=Math.max(0,(P._hype||0)-dt);P._convWin=Math.max(0,(P._convWin||0)-dt);
+  P._allBuff=Math.max(0,(P._allBuff||0)-dt);P._toastCd=Math.max(0,(P._toastCd||0)-dt);P._guardCd=Math.max(0,(P._guardCd||0)-dt);
+  /* mosh：敌人乱撞掉血 */
+  if(P._moshT>0){G.enemies.forEach(e=>{if(e.dead||e.boss||e.ally)return;e.x+=Math.cos(e.gait*2.3+e.x)*e.spd*dt*.7;e.y+=Math.sin(e.gait*1.9+e.y)*e.spd*dt*.7;e._moshCd=(e._moshCd||0)-dt;if(e._moshCd<=0){for(const o of G.enemies){if(o!==e&&!o.dead&&!o.ally&&dist2(o,e)<((e.r+o.r+4)**2)){e._moshCd=.6;hurtEnemy(e,skHit('melee',.8),false,{noTrig:1,noFx:1,sx:o.x,sy:o.y});break;}}}});}
+  /* 领域 */
+  G.fields.forEach(f=>{f.t+=dt;f._tk=(f._tk||0)+dt;const tk=f._tk>=.5;if(tk)f._tk=0;
+    if(f.slow)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,f)<f.r*f.r)e.slow=Math.max(e.slow,(1-(f.slowPct||.4))<.5?.4:.4);});
+    if(f.vuln)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,f)<f.r*f.r){e.vuln=Math.max(e.vuln||0,.6);e.vulnP=Math.max(e.vulnP||0,f.vuln);}});
+    if(tk&&f.burn)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,f)<f.r*f.r){e.burn=Math.max(e.burn||0,1.2);e.burnDps=Math.max(e.burnDps||0,f.burn);}});
+    if(tk&&f.heal&&dist2(P,f)<f.r*f.r)P.hp=Math.min(ST().maxhp,P.hp+(f.heal||0));});
+  G.fields=G.fields.filter(f=>f.t<f.ttl);
+  /* 友军 */
+  G.allies.forEach(a=>{a.ttl-=dt;a.cd-=dt;a.gait=(a.gait||0)+dt*5;
+    let best=null,bd=440*440;G.enemies.forEach(e=>{if(e.dead||e.ally)return;const d=dist2(e,a);if(d<bd){bd=d;best=e;}});
+    if(best){const an=Math.atan2(best.y-a.y,best.x-a.x);a.x+=Math.cos(an)*130*dt;a.y+=Math.sin(an)*130*dt;
+      if(a.cd<=0&&bd<320*320){a.cd=.85;const pc=panelCrit();G.bullets.push({x:a.x,y:a.y-8,vx:Math.cos(an)*280,vy:Math.sin(an)*280,dmg:skHit('ranged',a.pct),crit:pc.c,cm:pc.cm,pierce:0,pdec:1,bounce:0,split:0,homing:1,chain:0,ttl:1.6,r:7,col:'#7af0ea',kind:'spark',status:{},hit:new Set()});}}});
+  G.allies=G.allies.filter(a=>a.ttl>0);
+  /* 永久陪伴分身：跟随玩家、伤害随波 */
+  G.clones.forEach(c=>{if(c.sister){c.x+=(P.x-36-c.x)*.08;c.y+=(P.y-c.y)*.08;c.dmg=skHit('ranged',.25);}});
+  /* 殿下/俯冲：冲刺结束落点 AOE */
+  if(P._dashAOE&&P._dashT<=0){const o=P._dashAOE;P._dashAOE=null;skAOE(P.x,P.y,o.r||100,skHit('melee',o.n*10||2),{knock:50,col:'#ffe07a',shake:6,ally:o.n<.2?{p:1,pct:.15,ttl:3}:null});}
 }
 
 /* ---------- 系统B · 触发事件总线 (§2.6) ---------- */
@@ -1031,12 +1140,13 @@ function shockArc(src,dmg,jumps){                     // 感电：受击瞬间�
 }
 function fireWeapon(w,st){
   const d=WEAPONS[w.id], mech=wMech(w.id,w.lvl);
-  const range=d.range*(1+st.range);
+  const ov=P._overload?1:0; if(ov)P._overload=0;       // ③ 义体过载：这一发投射物×3/范围×3/连锁3
+  let range=d.range*(1+st.range)*(ov?3:1);
   let baseDmg=wDmg(w.id,w.lvl)*wAddBracket(d,st);
   if(P.nextHitBonus){baseDmg*=(1+P.nextHitBonus);P.nextHitBonus=0;}   // 礼物转化：下次攻击加伤
-  const F={multishot:(st.multishot||0)+(mech.multishot||0), pierce:(st.pierce||0)+(mech.pierce||0),
+  const F={multishot:(st.multishot||0)+(mech.multishot||0)+(ov?2:0), pierce:(st.pierce||0)+(mech.pierce||0),
     bounce:(st.bounce||0)+(mech.bounce||0), split:(st.split||0)+(mech.split||0),
-    homing:(st.homing||0)+(mech.homing||0), chain:(st.chain||0)+(mech.chain||0),
+    homing:(st.homing||0)+(mech.homing||0), chain:(st.chain||0)+(mech.chain||0)+(ov?3:0),
     boom:(mech.boomerang||(d.type==='boomerang')?1:0)};
   const status={knockback:st.knockback+(mech.knockback||0)};
   if(d.status)status[d.status]=1;
@@ -1112,7 +1222,8 @@ function update(dt){
   const st=ST(); _st=st;
   G._hsCd=Math.max(0,(G._hsCd||0)-dt);
   G._impactN=0;                                     // 每帧命中特效预算计数（防大面积命中刷爆特效→卡顿）
-  busTick(dt); procTick(dt);
+  busTick(dt); procTick(dt); skTick(dt);            // 技能/buff/领域/友军/mosh 推进
+  if(P.mods[2]==='B'){P._bioT=(P._bioT||0)+dt;if(P._bioT>=5){P._bioT=0;P._bio=Math.min(8,(P._bio||0)+1);}}  // ③ 生体无伤叠层
   P._explodeCd=Math.max(0,(P._explodeCd||0)-dt);
   P._saveT=Math.max(0,(P._saveT||0)-dt);
   /* 玩家移动 */
@@ -1270,7 +1381,12 @@ function update(dt){
     if(e.poison>0){e.poison=Math.max(0,e.poison-dt);if(e.poison<=0)e.poisonStk=0;e._pT=(e._pT||0)-dt;if(e._pT<=0){e._pT=0.5;e.hp-=(e.poisonDps||4)*0.5;float(e.x,e.y-e.r-4,'毒','#9af07a');if(e.hp<=0){killEnemy(e);return;}}}
     if(e.burn>0){e.burn=Math.max(0,e.burn-dt);e._bT=(e._bT||0)-dt;if(e._bT<=0){e._bT=0.5;e.hp-=(e.burnDps||5)*0.5;float(e.x,e.y-e.r-4,'烧','#ff8a3a');if(e.hp<=0){killEnemy(e);return;}}}
     e.shock=Math.max(0,(e.shock||0)-dt);e._shockCd=Math.max(0,(e._shockCd||0)-dt);
+    e.frozen=Math.max(0,(e.frozen||0)-dt);
     if(e.stun>0)return;
+    if(e.fear>0){e.fear-=dt;const fa=Math.atan2(e.y-P.y,e.x-P.x);e.x=clamp(e.x+Math.cos(fa)*e.spd*1.1*dt,-30,AW+30);e.y=clamp(e.y+Math.sin(fa)*e.spd*1.1*dt,-30,AH+30);return;}  // 恐惧逃散
+    if(P._moshT>0&&!e.boss)return;                    // mosh：移动交给 skTick，跳过常规AI/攻击
+    const _bs=(P._skT>0&&P.activeSkill&&P.activeSkill.buff)||0;
+    if(_bs&&_bs.stealth&&!e.boss){e.x+=Math.cos(e.gait)*e.spd*.25*dt;e.y+=Math.sin(e.gait)*e.spd*.25*dt;return;}  // 脱仇恨：乱晃不追
     const sp=e.spd*(e.slow>0?.5:1);
     const a=Math.atan2(P.y-e.y,P.x-e.x);
     if(e.boss)bossAI(e,dt,a,sp);
@@ -1323,7 +1439,12 @@ function update(dt){
     const _mv=Math.hypot(e.x-(e._px||e.x),e.y-(e._py||e.y));e._px=e.x;e._py=e.y;
     e._mv=_mv; e.gait=(e.gait||0)+_mv*0.16+dt*1.8;
     /* 接触伤害 */
-    if(!e.bomber&&dist2(e,P)<((e.r+bodyRadius(P.mods))**2))hitPlayer(e.dmg);
+    if(!e.bomber&&dist2(e,P)<((e.r+bodyRadius(P.mods))**2)){
+      if(P._skT>0&&P.activeSkill&&P.activeSkill.buff&&(P.activeSkill.buff.fly||P.activeSkill.buff.noContact)){}  // 飞行/独舞：免疫接触
+      else hitPlayer(e.dmg);
+      if(P._cheer>0&&(e._cheerCd||0)<=0){e._cheerCd=.5;hurtEnemy(e,skHit('melee',.5),false,{noTrig:1,noFx:1});}   // 应援全开：贴身反伤
+    }
+    if(e._cheerCd)e._cheerCd-=dt;
   });
   G.enemies=G.enemies.filter(e=>!e.dead);
   /* 敌弹 */
@@ -1367,8 +1488,9 @@ function update(dt){
   dmTick(dt);
 }
 function collect(d){
-  if(d.gold){const v=Math.round(d.gold*(1+ST().gold));G.gold+=v;G.totalGold+=v;emit('onGold',{v});}
+  if(d.gold){const v=Math.round(d.gold*(1+ST().gold));G.gold+=v;G.totalGold+=v;emit('onGold',{v});if(P.passiveSkill&&P.passiveSkill.onGold)P.passiveSkill.onGold(v);}
   if(d.xp)gainXp(d.xp*(1+ST().xp));
+  if(P.passiveSkill&&P.passiveSkill.onPickup)P.passiveSkill.onPickup();   // 全网妹妹/大胃王
 }
 function gainXp(v){
   G.xp+=v;
@@ -1555,6 +1677,16 @@ function render(){
     }
     ctx.restore();
   });
+  /* 技能领域（地面层） */
+  G.fields.forEach(f=>{const T=performance.now();ctx.save();
+    ctx.globalAlpha=.10+Math.sin(T/200)*.04;ctx.fillStyle=f.col||'#9b6bff';ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,7);ctx.fill();
+    ctx.globalAlpha=.45;ctx.strokeStyle=f.col||'#9b6bff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,7);ctx.stroke();ctx.restore();});
+  /* 友军（圈来的观众，青色辉光 + 头顶心标记） */
+  G.allies.forEach(a=>{ctx.save();ctx.shadowColor='#46e8ff';ctx.shadowBlur=9;ctx.translate(a.x,a.y+a.r);if(P.x<a.x)ctx.scale(-1,1);
+    const img=ENEMY_IMG[a.type]||ENEMY_IMG[a.tex];
+    if(img&&img.width){const dh=a.r*3.0,dw=img.width*dh/img.height;ctx.imageSmoothingEnabled=false;ctx.drawImage(img,-dw/2,-dh,dw,dh);}
+    else{ctx.fillStyle='#7af0ea';ctx.beginPath();ctx.arc(0,-a.r,a.r,0,7);ctx.fill();}
+    ctx.restore();heartPath(ctx,a.x,a.y-a.r*2.2,2.5,'#7af0ea');});
   /* 掉落 */
   G.drops.forEach(d=>{                                   // 打赏：发光绿色桃心小宝石（醒目+脉动）
     const pulse=1+Math.sin(performance.now()/180+d.x)*0.14, s=5*pulse;
@@ -1789,9 +1921,9 @@ function updateHud(dt){
   const xb=$('xpBar');xb.querySelector('i').style.width=(G.xp/G.xpNext*100)+'%';
   xb.querySelector('span').textContent='人气 Lv'+G.level;
   $('gold').textContent='♥ '+G.gold;
-  $('skill').innerHTML=P.mods[4]==='P'
-    ?(P.skillCd>0?'开场表演 <b>'+P.skillCd.toFixed(0)+'s</b>':'开场表演 <b>READY[空格]</b>')
-    :(P.mods[4]==='T'?'互动型：弹幕投喂中…':'');
+  $('skill').innerHTML=P.activeSkill
+    ?(P._skT>0?P.activeSkill.name+' <b style="color:#7af0ea">'+P._skT.toFixed(1)+'s</b>':(P.skillCd>0?P.activeSkill.name+' <b>'+P.skillCd.toFixed(0)+'s</b>':P.activeSkill.name+' <b>READY[空格]</b>'))
+    :(P.passiveSkill?'被动·'+P.passiveSkill.name:(P._pendWeapon?'专属武器待装备':(P.mods[4]==='T'?'互动型·待出道':'')));
   const target=86+Math.floor((G.kills*23)+(G.level*120)+(G.wave*180));
   viewersShow+=(target-viewersShow)*.2;
   $('viewers').textContent='👀 '+Math.floor(viewersShow).toLocaleString();
@@ -2132,6 +2264,7 @@ function drawStream(t){
     const whiteIn=0.55, actDur=3.4, revealT=whiteIn+actDur, fadeOut=0.6, mStart=revealT+fadeOut, mDur=2.7;
     if(!cs.revealed&&T>=revealT){cs.revealed=true;P.mods.push(cs.key);P.hp=Math.min(P.hp,ST().maxhp);
       $('formLab').textContent=playerForm(P.mods).name;triggerStreamGift('改造完成✦');
+      if(P.mods.length===5)grantFormSkill();          // ⑤ 出道→解锁专属技能
       for(let i=0;i<3;i++)setTimeout(()=>emitPos(Math.min(P.mods.length,5)),i*450+250);}
     let wa=0;
     if(T<whiteIn)wa=T/whiteIn; else if(T<revealT)wa=1; else if(T<mStart)wa=1-(T-revealT)/fadeOut;
