@@ -1008,6 +1008,41 @@ const SKILLS={
  HDBNP:{type:'active',name:'至暗独舞',cd:22,dur:2,col:'#6a6a8a',buff:{noContact:1},on(){skAOE(P.x,P.y,160,skHit('melee',.4),{stun:2,vuln:.30,col:'#6a6a8a',shake:6});}},
  HDBNT:{type:'passive',name:'深夜醺然',dmgFn(){return Math.min(.4,G.wave*0.015);},onCrit(e){e.boozed=2;}},
 };
+/* —— 32 专属技能·一句话说明（HUD / 暂停面板共用） —— */
+const SKILL_DESC={
+ LSCYP:'化身全息天使8秒：飞射·追踪·多重，脚下灼烧领域',
+ LSCYT:'每击倒10名观众，自动齐射4连',
+ LSCNP:'召唤4具全息人偶分身助战6秒',
+ LSCNT:'命中25%概率触发一次暴击范围爆发',
+ LSBYP:'短时间内击倒的观众转化为应援军团',
+ LSBYT:'拾取回心态；濒死自动清场击退',
+ LSBNP:'全场冰冻3.5秒',
+ LSBNT:'每8秒脚下展开治疗+减速领域',
+ LDCYP:'8秒手速暴涨，周期向最远敌投落冰爆',
+ LDCYT:'解锁专属武器·义体百宝臂',
+ LDCNP:'脚下展开减速领域并震荡爆发',
+ LDCNT:'锁定单体麻痹，击杀触发感电爆发',
+ LDBYP:'冲刺突进，落点造成范围伤害',
+ LDBYT:'常驻青梅分身助战，濒死给护盾',
+ LDBNP:'8秒自动甩出追踪暴击星弹',
+ LDBNT:'心态越低伤害越高；濒死回血清场',
+ HSCYP:'8秒高抗压，反弹接触伤害',
+ HSCYT:'连杀累积，叠满转永久增伤',
+ HSCNP:'8秒飞行加速，可再按空格俯冲突进',
+ HSCNT:'自动格挡近身攻击并反弹爆发',
+ HSBYP:'6秒全场点燃+精准爆破',
+ HSBYT:'吃越多越强，每10个触发震退',
+ HSBNP:'5秒减速+易伤领域，自身暴击up',
+ HSBNT:'常驻减速领域，领域内击杀生金',
+ HDCYP:'8秒朝前喷射火焰，持续点燃',
+ HDCYT:'解锁专属武器·机车炮台',
+ HDCNP:'潜行3秒，结束瞬间致命爆发+恐惧',
+ HDCNT:'击杀30%概率策反邻近观众',
+ HDBYP:'6秒全场蹦迪，敌人互撞掉血',
+ HDBYT:'收到打赏回心态并给全队增益',
+ HDBNP:'免接触并眩晕+易伤全场',
+ HDBNT:'随波次成长增伤，暴击使敌微醺',
+};
 
 function grantFormSkill(){
   const code=P.mods.join(''); const sk=SKILLS[code]; if(!sk)return;
@@ -1832,6 +1867,58 @@ function render(){
   const cvg=ctx.createRadialGradient(AW/2,AH/2,AH*0.34,AW/2,AH/2,AH*0.78);
   cvg.addColorStop(0,'#0000');cvg.addColorStop(1,'#0a0816bb');ctx.fillStyle=cvg;ctx.fillRect(0,0,AW,AH);
   ctx.globalAlpha=.035;ctx.fillStyle='#000';for(let y=0;y<AH;y+=3)ctx.fillRect(0,y,AW,1);ctx.globalAlpha=1;
+  drawSkillHUD();                                        // 左下角·专属技能/大招面板
+}
+
+/* ===== 左下角专属技能面板：名称+说明+CD条（满则发光·ULTRA）；元气并入此处 ===== */
+function drawSkillHUD(){
+  if(G.scr!=='play')return;
+  const code=P.mods.join(''), def=SKILLS[code], isY=P.mods[3]==='Y', T=performance.now();
+  const x0=14, w=276, h=isY?70:58, y0=AH-h-12, pad=10;
+  let name,desc,badge,mode='locked';
+  if(def){ name=def.name; desc=SKILL_DESC[code]||'';
+    mode=def.type; badge=def.type==='active'?'主动':(def.type==='passive'?'被动':'专属武器'); }
+  else { name='专属技能'; desc=P.mods.length<5?'完成5次改造·出道后解锁':''; badge=''; }
+  const col=(def&&def.col)||'#7af0ea';
+  // —— 状态/进度 ——
+  let frac=1,label='',glow=false,dim=false;
+  if(mode==='active'){
+    if(P._skT>0){const dur=def.dur||1;frac=Math.max(0,P._skT/dur);label='演出中 '+P._skT.toFixed(1)+'s';glow=true;}
+    else if(P.skillCd>0){const full=def.cd*(A('automation')?.75:1);frac=Math.max(0,1-P.skillCd/full);label='CD '+Math.ceil(P.skillCd)+'s';dim=true;}
+    else{frac=1;label='ULTRA  空格';glow=true;}
+  } else if(mode==='passive'){ frac=1;label='常驻被动';dim=true; }
+  else if(mode==='weapon'){ frac=1;label=P._pendWeapon?'待装备(武器栏满)':'已装备·专属武器';dim=true; }
+  else { frac=0;label='未解锁'; }
+  const ready=(mode==='active'&&P.skillCd<=0&&P._skT<=0), pul=.5+.5*Math.sin(T/180);
+  ctx.save();ctx.textAlign='left';
+  // 面板底 + 边（就绪时发光描边）
+  ctx.globalAlpha=.84;ctx.fillStyle='#140e22';ctx.fillRect(x0,y0,w,h);ctx.globalAlpha=1;
+  if(ready){ctx.shadowColor=col;ctx.shadowBlur=8+pul*12;}
+  ctx.strokeStyle=ready?col:'#3a2f55';ctx.lineWidth=ready?2:1;ctx.strokeRect(x0+1,y0+1,w-2,h-2);ctx.shadowBlur=0;
+  // 名称 + 类型徽标
+  ctx.fillStyle=col;ctx.font='bold 13px "PingFang SC",Menlo,sans-serif';ctx.fillText(name,x0+pad,y0+19);
+  if(badge){const nw=ctx.measureText(name).width;ctx.font='10px "PingFang SC",sans-serif';
+    ctx.globalAlpha=.85;ctx.fillStyle=mode==='active'?'#ffd24a':'#9fb0d0';ctx.fillText('· '+badge,x0+pad+nw+8,y0+18);ctx.globalAlpha=1;}
+  // 说明
+  ctx.fillStyle='#b9b0d0';ctx.font='10px "PingFang SC",sans-serif';ctx.fillText(desc,x0+pad,y0+34);
+  // CD/状态条
+  const bx=x0+pad,by=y0+40,bw=w-pad*2,bh=9;
+  ctx.fillStyle='#241c33';ctx.fillRect(bx,by,bw,bh);
+  if(glow){ctx.shadowColor=col;ctx.shadowBlur=8+pul*8;}
+  ctx.globalAlpha=dim?.55:1;ctx.fillStyle=col;ctx.fillRect(bx,by,bw*frac,bh);
+  ctx.globalAlpha=1;ctx.shadowBlur=0;
+  // 条上文字
+  ctx.textAlign='center';ctx.font='bold 9px Menlo,monospace';
+  ctx.fillStyle=ready?'#140e22':'#e8e0ff';ctx.fillText(label,bx+bw/2,by+bh-1.5);
+  ctx.textAlign='left';
+  // 元气条（Y 气质）：橙色细条 + 左侧小标
+  if(isY){const hh=6,hy=by+bh+5,hp=Math.min(1,P.heat/100);
+    ctx.fillStyle='#9fb0d0';ctx.font='8px Menlo,monospace';ctx.fillText('元气',bx,hy+hh-0.5);
+    const lx=bx+26;
+    ctx.fillStyle='#241c33';ctx.fillRect(lx,hy,bw-26,hh);
+    if(P.heat>=100){ctx.shadowColor='#ffaa4a';ctx.shadowBlur=6+pul*6;}
+    ctx.fillStyle=P.heat>=100?'#ffd27a':'#ffaa4a';ctx.fillRect(lx,hy,(bw-26)*hp,hh);ctx.shadowBlur=0;}
+  ctx.restore();
 }
 function drawEnemy(e){
   const img=ENEMY_IMG[e.type]||ENEMY_IMG[e.tex];      // 新Boss无专属贴图→用映射的现有贴图
@@ -1902,11 +1989,7 @@ function drawOrbitWeapons(){                               // 佩戴武器环绕
 function drawPlayer(){
   drawChibi(ctx,P.x,P.y,P.mods,{face:P.face,moving:P.moving,run:P.bob,t:performance.now()/1000,hit:P.hitFlash||0});
   drawOrbitWeapons();
-  /* 热度条（元气流） */
-  if(P.mods[3]==='Y'&&P.heat>0){
-    ctx.fillStyle='#241c33';ctx.fillRect(P.x-20,P.y-48,40,4);
-    ctx.fillStyle='#ffaa4a';ctx.fillRect(P.x-20,P.y-48,40*(P.heat/50),4);
-  }
+  /* 元气条已移至左下角技能面板（取消角色头顶条） */
 }
 
 /* ---------- HUD/侧栏 ---------- */
@@ -2326,9 +2409,14 @@ function pauseModal(){
   const sets=Object.keys(P.setN).filter(s=>P.setN[s]>0).map(s=>{const n=P.setN[s],need=(typeof SETS!=='undefined'&&SETS[s]?SETS[s].n:3);
     return `<span class="pset ${n>=need?'on':''}">${s} ${n}/${need}</span>`;}).join('');
   // 技能（改造轴）
-  const skills=P.mods.map((m,idx)=>{const s=AXIS_SKILL[m];if(!s)return'';
-    const cd=(m==='P'&&P.skillCd>0)?` <em style="color:#ff9">CD ${P.skillCd.toFixed(0)}s</em>`:(m==='P'?' <em style="color:#7af">就绪[空格]</em>':'');
-    return `<div class="psk"><span class="kind ${s[0]==='主动'?'act':''}">${s[0]}</span><b>${s[1]}</b>${cd}<br><small>${s[2]}</small></div>`;
+  const skills=P.mods.map((m,idx)=>{
+    // ⑤ 出道：显示该形态真正解锁的专属技能（而非旧的通用 P/T 文案）
+    if(idx===4&&P.mods.length===5){const def=SKILLS[P.mods.join('')];if(def){
+      const kind=def.type==='active'?'主动':(def.type==='passive'?'被动':'专属武器');
+      const cd=def.type==='active'?(P.skillCd>0?` <em style="color:#ff9">CD ${P.skillCd.toFixed(0)}s</em>`:(P._skT>0?` <em style="color:#7af0ea">演出中 ${P._skT.toFixed(1)}s</em>`:' <em style="color:#7af">就绪[空格]</em>')):'';
+      return `<div class="psk"><span class="kind ${def.type==='active'?'act':''}">${kind}</span><b>${def.name}</b>${cd}<br><small>${SKILL_DESC[P.mods.join('')]||''}</small></div>`;}}
+    const s=AXIS_SKILL[m];if(!s)return'';
+    return `<div class="psk"><span class="kind ${s[0]==='主动'?'act':''}">${s[0]}</span><b>${s[1]}</b><br><small>${s[2]}</small></div>`;
   }).filter(Boolean).join('')||'<div class="pempty">原点·未改造</div>';
 
   showPanel(`<div class="pause">
