@@ -307,7 +307,8 @@ function dmTick(dt){
 function showPanel(html){$('panel').innerHTML=html;$('overlay').classList.add('show');G.scr='modal';}
 /* 改造「进化」过场：白光渐变 → 演出字幕 → 显示新形象 → 阿源照镜台词泡泡 → 进入下一环节 */
 function startCutscene(key){
-  const sc=(typeof MOD_SCENES!=='undefined')?MOD_SCENES[key]:null;
+  const code=P.mods.join('')+key;                 // 选完后的完整形态码（如 L / LS / LSCYP）
+  const sc=(typeof CUTSCENES!=='undefined'&&CUTSCENES[code])||((typeof MOD_SCENES!=='undefined')?MOD_SCENES[key]:null);
   $('overlay').classList.remove('show');
   if(!sc){P.mods.push(key);P.hp=Math.min(P.hp,ST().maxhp);$('formLab').textContent=playerForm(P.mods).name;nextModal();return;}
   G.scr='cut';
