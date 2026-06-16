@@ -1,0 +1,33 @@
+# --- 密钥（绝不上传）---
+.openai_key
+.ark_key
+*.key
+skills/openai-image-gen/.key
+
+# --- 系统/缓存垃圾 ---
+.claude/
+.DS_Store
+__pycache__/
+*.pyc
+node_modules/
+.vercel/
+*.tmp.png
+
+# --- 体积过大 / 非运行时（不进仓库，省体积）---
+_archive/
+play/art/idle_videos/
+
+# --- 开发相关（仅本地，不对外公开）---
+dev-portal.html
+doc.html
+play/library.html
+play/videos.html
+play/newdesign.html
+tools/
+skills/
+数值策划/
+文案/
+README.md
+character-prompts.md
+character-design/character-art-spec.md
+_compress_backup/
