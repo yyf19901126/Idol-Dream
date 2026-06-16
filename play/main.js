@@ -96,7 +96,7 @@ function ST(){
     dmg, dmgMelee, dmgRanged, dmgElem, engi,
     aspd, crit:Math.min(1,crit), range, armor, dodge:Math.min(.6,dodge),
     speed, luck, harvest, xp, gold,
-    critMult:Math.min(3.0,1.8+A('critMult')), pickup:85+A('pickup'),
+    critMult:Math.min(3.0,1.8+A('critMult')), pickup:200+A('pickup'),
     bounce:A('bounce'),pierce:A('pierce'),multishot:A('multishot'),split:A('split'),
     homing:A('homing'),orbit:A('orbit'),chain:A('chain'),knockback:A('knockback'),
     projSpd:1+A('projSpd'),projSize:1+A('projSize'),procLuck:A('procLuck'),
@@ -124,7 +124,8 @@ addEventListener('keydown',e=>{
   audioInit();                                   // 任意按键激活音频上下文（满足浏览器自动播放策略）
   keys[e.key.toLowerCase()]=1;
   if(e.key===' ')castSkill();
-  if(e.key==='m'||e.key==='M'){SFX_ON=!SFX_ON;toast(SFX_ON?'🔊 音效开':'🔇 音效关');updateSfxBtn&&updateSfxBtn();}
+  if(e.key==='m'||e.key==='M'){SFX_ON=!SFX_ON;toast(SFX_ON?'🔊 声音开':'🔇 全部静音');updateSfxBtn&&updateSfxBtn();updateMusicGain&&updateMusicGain();}
+  if(e.key==='n'||e.key==='N'){musicOn=!musicOn;updateMusicGain&&updateMusicGain();toast(musicOn?'🎵 音乐开':'🎵 音乐关');}
   if(e.key==='`'||e.key==='~')toggleDev();
 });
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
@@ -137,9 +138,12 @@ function fx(o){o.t=0;G.fx.push(o);if(G.fx.length>120)G.fx.shift();}
 function addShake(v){G.shake=Math.max(G.shake||0,v);}
 function hitStop(s){ if((G._hsCd||0)>0)return; G._hsCd=0.10; G.hitStop=Math.min(0.09,Math.max(G.hitStop||0,s)); }  // 顿帧（带 0.1s 冷却，群战不糊）
 /* WebAudio 程序化音效（无音频资源；首次用户手势后激活） */
-let AC=null, masterGain=null, SFX_ON=true; const _sfxT={};
+let AC=null, masterGain=null, musicGain=null, SFX_ON=true; const _sfxT={};
 function audioInit(){
-  try{ if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)(); masterGain=AC.createGain(); masterGain.gain.value=0.22; masterGain.connect(AC.destination);} }catch(e){ AC=null; return; }
+  try{ if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();
+    masterGain=AC.createGain(); masterGain.gain.value=0.22; masterGain.connect(AC.destination);
+    musicGain=AC.createGain(); musicGain.gain.value=0; musicGain.connect(AC.destination);   // 背景音乐独立音量
+  } }catch(e){ AC=null; return; }
   if(AC.state==='suspended')AC.resume();
 }
 function _osc(freq,dur,type,vol,slideTo,t0){
@@ -192,7 +196,37 @@ function sfx(kind){
   }
 }
 function updateSfxBtn(){const b=document.getElementById('sfxToggle');if(b){b.textContent=SFX_ON?'🔊':'🔇';b.classList.toggle('off',!SFX_ON);}}
-(function(){const b=document.getElementById('sfxToggle');if(b)b.onclick=()=>{audioInit();SFX_ON=!SFX_ON;updateSfxBtn();toast(SFX_ON?'🔊 音效开':'🔇 音效关');};})();
+(function(){const b=document.getElementById('sfxToggle');if(b)b.onclick=()=>{audioInit();SFX_ON=!SFX_ON;updateSfxBtn();updateMusicGain();toast(SFX_ON?'🔊 音效开':'🔇 音效关');};})();
+/* ===== 背景音乐（程序生成·循环）：王道进行 F–G–Em–Am 的甜系 citypop 小循环（贝斯+柔铺底+琶音）===== */
+let musicOn=true, _musTimer=null, _musNext=0, _musStep=0;
+const MUS_BPM=124, MUS_STEP=60/MUS_BPM/4, MUS_VOL=0.11;   // 16分音步长 / 音乐总音量（小声垫底）
+const MUS_SONG=[
+  {bass:87.31, ch:[349.23,440.00,523.25]},   // F  (F A C)
+  {bass:98.00, ch:[392.00,493.88,587.33]},   // G  (G B D)
+  {bass:82.41, ch:[329.63,392.00,493.88]},   // Em (E G B)
+  {bass:110.0, ch:[440.00,523.25,659.25]},   // Am (A C E)
+];
+function _mosc(freq,dur,type,vol,t0){          // 音乐专用振荡器（走 musicGain，柔和起音）
+  if(!AC||!musicGain)return;
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t0);
+  g.gain.setValueAtTime(.0001,t0); g.gain.linearRampToValueAtTime(Math.max(.0001,vol),t0+0.02); g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  o.connect(g); g.connect(musicGain); o.start(t0); o.stop(t0+dur+.04);
+}
+function _musStepFn(step,t){
+  const bar=Math.floor(step/16)%4, b=step%16, S=MUS_SONG[bar];
+  if(b===0||b===8) _mosc(S.bass,0.42,'triangle',0.55,t);                  // 贝斯：每小节 1、3 拍根音
+  if(b===0) S.ch.forEach(f=>_mosc(f,1.7,'sine',0.16,t));                  // 柔和铺底 pad（整小节）
+  if(b%2===0){const seq=[S.ch[0],S.ch[1],S.ch[2],S.ch[1]];_mosc(seq[(b/2)%4]*2,0.20,'triangle',0.30,t);}  // 琶音（高八度，plucky）
+}
+function _musTick(){
+  if(!AC||AC.state!=='running'){_musNext=AC?AC.currentTime+0.1:0;return;}  // 后台挂起时不抢拍
+  while(_musNext<AC.currentTime+0.12){_musStepFn(_musStep,_musNext);_musNext+=MUS_STEP;_musStep=(_musStep+1)%64;}
+}
+function startMusic(){ if(!AC||_musTimer)return; _musStep=0;_musNext=AC.currentTime+0.12; _musTimer=setInterval(_musTick,25); updateMusicGain(); }
+function stopMusic(){ if(_musTimer){clearInterval(_musTimer);_musTimer=null;} }
+function musicWant(){ return (SFX_ON&&musicOn&&typeof G!=='undefined'&&G.scr==='play'&&!paused)?MUS_VOL:0; }  // 仅战斗中（scr=play、未暂停）才出声
+function updateMusicGain(){ if(musicGain)musicGain.gain.value=musicWant(); }
 const dmBox=$('dm');
 function danmaku(txt,cls,user){
   const d=document.createElement('div');d.className='m '+(cls||'');
@@ -274,7 +308,7 @@ function startScreen(){
   <div class="btn" onclick="beginRun()">开始直播</div>`);
   $('panel').querySelector('.btn').onclick=beginRun;
 }
-function beginRun(){audioInit();hidePanel();prefillDanmaku(20);startWave(1);danmaku('直播开始了，有人在吗？','sys');}
+function beginRun(){audioInit();startMusic();hidePanel();prefillDanmaku(20);startWave(1);danmaku('直播开始了，有人在吗？','sys');}
 function startWave(w){
   const bossW=(w===20||(w>20&&w%5===0));      // 波20 + 无尽里程碑(25/30/35…)=完整Boss波
   G.wave=w;G.waveT=0;G.waveDur=bossW?999:Math.min(Math.round(23+1.7*w),60);   // §07 v0.3.3 波时长拉长(w19=55s)，无尽封顶60s
@@ -316,7 +350,7 @@ function startWave(w){
 }
 function endWave(){
   emit('onWaveEnd',{});P._brave=0;P._cashBuff=0;   // 越战越勇/钞能力反应波末清零
-  G.drops.forEach(d=>collect(d));
+  if(G.drops.length)toast('本波有 '+G.drops.length+' 份打赏没捡，浪费了！');  // 没捡的打赏不再自动收，作废
   G.drops=[];G.enemies=[];G.ebullets=[];G.bullets=[];G.zones=[];G.clones=[];
   if(P.mods[2]==='B'&&G.noHit){G.gold+=18;G.totalGold+=18;toast('无伤波次！观众追加打赏 +18');}
   const salary=8+G.wave*3+Math.floor(ST().harvest);   // 时薪 + 恰饭
@@ -676,6 +710,7 @@ function startShopVid(){
 /* 结局 */
 function gameOver(){
   G.scr='over';
+  stopMusic();
   danmaku('主播怎么不动了……','sys');
   showPanel(`<h2 style="color:#ff5a7a">心态崩了，下播。</h2>
   <div class="sub">第 ${G.wave} 波 ｜ 捕获观众 ${G.kills} ｜ 收到礼物 ${G.giftN} ｜ 累计打赏 ♥ ${G.totalGold}<br><br>
@@ -708,6 +743,9 @@ function enemyHP(d,w,mini){
   return w<=20 ? d.hp*baseScale(w) : d.hp*baseScale(20)*Math.pow(1.09,w-20);  // 波20后切指数(剪刀差)
 }
 function enemyDMG(d,w){return d.dmg*(1+0.07*w);}
+/* §1.1 移速上限档（v0.3.6）：肉墙×1.65 / 远程×1.50 / 高速冲锋×1.30；Boss 等未列默认肉墙 1.65 */
+const SPD_CAP={luren:1.65,baipiao:1.65,heifen:1.65,penzi:1.50,leping:1.50,shuijun:1.30,duijia:1.30};
+function eSpdMul(type,w){return Math.min(1+0.022*w, SPD_CAP[type]||1.65);}   // eSpd=baseSpd×min(1+0.022w, cap)
 function spawnEnemy(type,opt){
   opt=opt||{};
   const d=ETYPES[type],w=G.wave, mini=!!opt.mini;
@@ -715,7 +753,7 @@ function spawnEnemy(type,opt){
   if(side===0){x=rnd(30,AW-30);y=-20;}else if(side===1){x=rnd(30,AW-30);y=AH+20;}
   else if(side===2){x=-20;y=rnd(30,AH-30);}else{x=AW+20;y=rnd(30,AH-30);}
   const hp=enemyHP(d,w,mini);
-  const e={type,x,y,hp,maxhp:hp,spd:d.spd*rnd(.9,1.1),dmg:enemyDMG(d,w),r:d.r*(mini?1.45:2),
+  const e={type,x,y,hp,maxhp:hp,spd:d.spd*rnd(.9,1.1)*eSpdMul(type,w),dmg:enemyDMG(d,w),r:d.r*(mini?1.45:2),
     gold:d.gold,xp:d.xp,elite:d.elite,boss:d.boss,kind:d.kind,tex:d.tex,mini:mini,shooter:d.shooter,bomber:d.bomber,
     shootCd:rnd(1,2.5),slow:0,stun:0,mark:0,hitFlash:0,ai:0,vx:0,vy:0,
     spr:pick(ESPR[type]||ESPR.boss),bubble:0,gait:rnd(0,6.28),t1:rnd(1.5,3),t2:rnd(3,5),t3:rnd(2,4)};
@@ -1368,12 +1406,27 @@ function bossAI(e,dt,a,sp){
 }
 
 /* ---------- 渲染 ---------- */
-let floorCv=null;
+let floorCv=null, floorStage=-1, _floorDirty=false;
+const MAPBG={}, MAPBGLOAD={};                          // 各阶段(0-5)地图背景，按当前改造阶段切换
+function getMapBg(stage){
+  if(stage in MAPBG)return MAPBG[stage];
+  if(!MAPBGLOAD[stage]){MAPBGLOAD[stage]=1;const im=new Image();
+    im.onload=()=>{MAPBG[stage]=im;_floorDirty=true;};im.onerror=()=>{MAPBG[stage]=null;};im.src='art/maps/bg'+stage+'.png';}
+  return undefined;
+}
 function makeFloor(){
   floorCv=document.createElement('canvas');floorCv.width=AW;floorCv.height=AH;
   const g=floorCv.getContext('2d');
+  const stage=Math.min(5,(typeof P!=='undefined'&&P.mods)?P.mods.length:0); floorStage=stage;
   g.fillStyle='#0d0a16';g.fillRect(0,0,AW,AH);
-  g.strokeStyle='#171226';g.lineWidth=1;
+  const bg=getMapBg(stage);
+  if(bg&&bg.width){                                    // 关卡地图背景：cover 平铺 + 压暗 + 低不透明 → 浅淡纹理不干扰视线
+    const s=Math.max(AW/bg.width,AH/bg.height),dw=bg.width*s,dh=bg.height*s;
+    g.save();g.imageSmoothingEnabled=false;g.globalAlpha=0.40;g.drawImage(bg,(AW-dw)/2,(AH-dh)/2,dw,dh);g.restore();
+    g.fillStyle='rgba(13,10,22,0.5)';g.fillRect(0,0,AW,AH);   // 再压暗一层，保持安静
+    g.strokeStyle='#ffffff07';                                // 有背景时网格更淡
+  }else g.strokeStyle='#171226';                              // 无图回退：原深色网格
+  g.lineWidth=1;
   for(let x=0;x<AW;x+=44){g.beginPath();g.moveTo(x,0);g.lineTo(x,AH);g.stroke();}
   for(let y=0;y<AH;y+=44){g.beginPath();g.moveTo(0,y);g.lineTo(AW,y);g.stroke();}
   /* 舞台聚光 */
@@ -1462,6 +1515,8 @@ function drawSummon(ctx,x,y,u){
 }
 function render(){
   ctx.save();
+  const _fst=Math.min(5,P.mods.length);                // 阶段变化或地图背景刚加载完→重建地面
+  if(!floorCv||_floorDirty||floorStage!==_fst){_floorDirty=false;makeFloor();}
   if(G.shake>0)ctx.translate(rnd(-G.shake,G.shake)*.5,rnd(-G.shake,G.shake)*.5);
   ctx.drawImage(floorCv,0,0);
   /* 领域 */
@@ -1483,7 +1538,13 @@ function render(){
     ctx.restore();
   });
   /* 掉落 */
-  G.drops.forEach(d=>ctx.drawImage(COIN,d.x-5,d.y-5));
+  G.drops.forEach(d=>{                                   // 打赏：发光绿色桃心小宝石（醒目+脉动）
+    const pulse=1+Math.sin(performance.now()/180+d.x)*0.14, s=5*pulse;
+    ctx.save();ctx.shadowColor='#46f0a0';ctx.shadowBlur=13;
+    heartPath(ctx,d.x,d.y-2,s,'#3fe88c');                 // 绿桃心主体
+    ctx.shadowBlur=0;ctx.globalAlpha=.85;ctx.fillStyle='#e6fff0';ctx.fillRect(d.x-s*0.55,d.y-s*0.7,2,2);  // 宝石高光
+    ctx.restore();
+  });
   /* 召唤物（按召唤武器画不同形态） */
   G.clones.forEach(c=>{
     const u=c.unit||'holo', bob=Math.sin(performance.now()/300+(c.bob||0))*3;
@@ -2046,7 +2107,7 @@ function drawStream(t){
     else if(T>=mStart){const mi=Math.floor((T-mStart)/mDur);if(mi<cs.mirror.length)bub=cs.mirror[mi];}
     if(bub){
       const lines=wrapCN(bub,15),lh=17,pad=9,bw=w-26,bh=lines.length*lh+pad*2;
-      const by=h-bh-14;                                  // 演出/照镜泡泡都放在人物框底部
+      const by=h-bh-40;                                  // 演出/照镜泡泡放底部，但上移避开「当前形态」标签
       g.fillStyle='rgba(14,10,22,0.9)';roundRect(g,13,by,bw,bh,9);g.fill();
       g.strokeStyle=acc;g.lineWidth=2;g.stroke();
       g.fillStyle='#fff';g.font='13px "PingFang SC",sans-serif';g.textAlign='left';
@@ -2133,6 +2194,7 @@ addEventListener('keydown',e=>{
 });
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(musicGain){const w=musicWant();musicGain.gain.value+=(w-musicGain.gain.value)*0.10;}  // 背景音乐：仅战斗渐入，过场/商店渐出
   if(G.scr==='play'&&!paused){
     if((G.hitStop||0)>0){G.hitStop-=dt;}     // 命中顿帧：冻结一瞬强化打击感（仍渲染）
     else update(dt);
