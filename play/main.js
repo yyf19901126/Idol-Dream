@@ -1258,6 +1258,7 @@ function update(dt){
   G._hsCd=Math.max(0,(G._hsCd||0)-dt);
   G._impactN=0;                                     // 每帧命中特效预算计数（防大面积命中刷爆特效→卡顿）
   busTick(dt); procTick(dt); skTick(dt);            // 技能/buff/领域/友军/mosh 推进
+  if(G.infHeat)P.heat=100;                           // dev·无限元气
   if(P.mods[2]==='B'){P._bioT=(P._bioT||0)+dt;if(P._bioT>=5){P._bioT=0;P._bio=Math.min(8,(P._bio||0)+1);}}  // ③ 生体无伤叠层
   P._explodeCd=Math.max(0,(P._explodeCd||0)-dt);
   P._saveT=Math.max(0,(P._saveT||0)-dt);
@@ -1867,58 +1868,34 @@ function render(){
   const cvg=ctx.createRadialGradient(AW/2,AH/2,AH*0.34,AW/2,AH/2,AH*0.78);
   cvg.addColorStop(0,'#0000');cvg.addColorStop(1,'#0a0816bb');ctx.fillStyle=cvg;ctx.fillRect(0,0,AW,AH);
   ctx.globalAlpha=.035;ctx.fillStyle='#000';for(let y=0;y<AH;y+=3)ctx.fillRect(0,y,AW,1);ctx.globalAlpha=1;
-  drawSkillHUD();                                        // 左下角·专属技能/大招面板
 }
 
-/* ===== 左下角专属技能面板：名称+说明+CD条（满则发光·ULTRA）；元气并入此处 ===== */
-function drawSkillHUD(){
-  if(G.scr!=='play')return;
-  const code=P.mods.join(''), def=SKILLS[code], isY=P.mods[3]==='Y', T=performance.now();
-  const x0=14, w=276, h=isY?70:58, y0=AH-h-12, pad=10;
+/* ===== 左下角专属技能面板（侧栏 DOM·现场人气热度下方）：名称+说明+CD条（满则发光·ULTRA）；元气并入此处 ===== */
+function updateSkillPanel(){
+  const panel=$('skillPanel');if(!panel)return;
+  const code=P.mods.join(''), def=SKILLS[code], isY=P.mods[3]==='Y';
   let name,desc,badge,mode='locked';
   if(def){ name=def.name; desc=SKILL_DESC[code]||'';
     mode=def.type; badge=def.type==='active'?'主动':(def.type==='passive'?'被动':'专属武器'); }
   else { name='专属技能'; desc=P.mods.length<5?'完成5次改造·出道后解锁':''; badge=''; }
   const col=(def&&def.col)||'#7af0ea';
-  // —— 状态/进度 ——
-  let frac=1,label='',glow=false,dim=false;
+  let frac=1,label='',ready=false,dim=false;
   if(mode==='active'){
-    if(P._skT>0){const dur=def.dur||1;frac=Math.max(0,P._skT/dur);label='演出中 '+P._skT.toFixed(1)+'s';glow=true;}
+    if(P._skT>0){frac=Math.max(0,P._skT/(def.dur||1));label='演出中 '+P._skT.toFixed(1)+'s';}
     else if(P.skillCd>0){const full=def.cd*(A('automation')?.75:1);frac=Math.max(0,1-P.skillCd/full);label='CD '+Math.ceil(P.skillCd)+'s';dim=true;}
-    else{frac=1;label='ULTRA  空格';glow=true;}
+    else{frac=1;label='ULTRA · 空格';ready=true;}
   } else if(mode==='passive'){ frac=1;label='常驻被动';dim=true; }
   else if(mode==='weapon'){ frac=1;label=P._pendWeapon?'待装备(武器栏满)':'已装备·专属武器';dim=true; }
   else { frac=0;label='未解锁'; }
-  const ready=(mode==='active'&&P.skillCd<=0&&P._skT<=0), pul=.5+.5*Math.sin(T/180);
-  ctx.save();ctx.textAlign='left';
-  // 面板底 + 边（就绪时发光描边）
-  ctx.globalAlpha=.84;ctx.fillStyle='#140e22';ctx.fillRect(x0,y0,w,h);ctx.globalAlpha=1;
-  if(ready){ctx.shadowColor=col;ctx.shadowBlur=8+pul*12;}
-  ctx.strokeStyle=ready?col:'#3a2f55';ctx.lineWidth=ready?2:1;ctx.strokeRect(x0+1,y0+1,w-2,h-2);ctx.shadowBlur=0;
-  // 名称 + 类型徽标
-  ctx.fillStyle=col;ctx.font='bold 13px "PingFang SC",Menlo,sans-serif';ctx.fillText(name,x0+pad,y0+19);
-  if(badge){const nw=ctx.measureText(name).width;ctx.font='10px "PingFang SC",sans-serif';
-    ctx.globalAlpha=.85;ctx.fillStyle=mode==='active'?'#ffd24a':'#9fb0d0';ctx.fillText('· '+badge,x0+pad+nw+8,y0+18);ctx.globalAlpha=1;}
-  // 说明
-  ctx.fillStyle='#b9b0d0';ctx.font='10px "PingFang SC",sans-serif';ctx.fillText(desc,x0+pad,y0+34);
-  // CD/状态条
-  const bx=x0+pad,by=y0+40,bw=w-pad*2,bh=9;
-  ctx.fillStyle='#241c33';ctx.fillRect(bx,by,bw,bh);
-  if(glow){ctx.shadowColor=col;ctx.shadowBlur=8+pul*8;}
-  ctx.globalAlpha=dim?.55:1;ctx.fillStyle=col;ctx.fillRect(bx,by,bw*frac,bh);
-  ctx.globalAlpha=1;ctx.shadowBlur=0;
-  // 条上文字
-  ctx.textAlign='center';ctx.font='bold 9px Menlo,monospace';
-  ctx.fillStyle=ready?'#140e22':'#e8e0ff';ctx.fillText(label,bx+bw/2,by+bh-1.5);
-  ctx.textAlign='left';
-  // 元气条（Y 气质）：橙色细条 + 左侧小标
-  if(isY){const hh=6,hy=by+bh+5,hp=Math.min(1,P.heat/100);
-    ctx.fillStyle='#9fb0d0';ctx.font='8px Menlo,monospace';ctx.fillText('元气',bx,hy+hh-0.5);
-    const lx=bx+26;
-    ctx.fillStyle='#241c33';ctx.fillRect(lx,hy,bw-26,hh);
-    if(P.heat>=100){ctx.shadowColor='#ffaa4a';ctx.shadowBlur=6+pul*6;}
-    ctx.fillStyle=P.heat>=100?'#ffd27a':'#ffaa4a';ctx.fillRect(lx,hy,(bw-26)*hp,hh);ctx.shadowBlur=0;}
-  ctx.restore();
+  panel.style.setProperty('--ac',col);
+  panel.classList.toggle('ready',ready);
+  const nEl=$('skName');nEl.textContent=name;nEl.style.color=col;
+  const bEl=$('skBadge');bEl.textContent=badge;bEl.className='skp-badge'+(mode==='active'?' act':'');
+  $('skDesc').textContent=desc;
+  const f=$('skFill');f.style.width=(frac*100)+'%';f.style.background=col;f.style.opacity=dim?.55:1;
+  $('skLabel').textContent=label;
+  $('skHeat').style.display=isY?'flex':'none';
+  if(isY){const hf=$('skHeatFill');hf.style.width=Math.min(100,P.heat)+'%';hf.classList.toggle('full',P.heat>=100);}
 }
 function drawEnemy(e){
   const img=ENEMY_IMG[e.type]||ENEMY_IMG[e.tex];      // 新Boss无专属贴图→用映射的现有贴图
@@ -2004,9 +1981,7 @@ function updateHud(dt){
   const xb=$('xpBar');xb.querySelector('i').style.width=(G.xp/G.xpNext*100)+'%';
   xb.querySelector('span').textContent='人气 Lv'+G.level;
   $('gold').textContent='♥ '+G.gold;
-  $('skill').innerHTML=P.activeSkill
-    ?(P._skT>0?P.activeSkill.name+' <b style="color:#7af0ea">'+P._skT.toFixed(1)+'s</b>':(P.skillCd>0?P.activeSkill.name+' <b>'+P.skillCd.toFixed(0)+'s</b>':P.activeSkill.name+' <b>READY[空格]</b>'))
-    :(P.passiveSkill?'被动·'+P.passiveSkill.name:(P._pendWeapon?'专属武器待装备':(P.mods[4]==='T'?'互动型·待出道':'')));
+  updateSkillPanel();                                    // 左下角专属技能面板（现场人气热度下方）
   const target=86+Math.floor((G.kills*23)+(G.level*120)+(G.wave*180));
   viewersShow+=(target-viewersShow)*.2;
   $('viewers').textContent='👀 '+Math.floor(viewersShow).toLocaleString();
@@ -2481,6 +2456,7 @@ function devCheat(k){
   else if(k==='elite'){if(G.scr==='play')spawnEnemy('heifen');}
   else if(k==='lv')gainXp(G.xpNext);
   else if(k==='god')G.god=!G.god;
+  else if(k==='heat'){G.infHeat=!G.infHeat;if(G.infHeat)P.heat=100;}
   buildDev();
 }
 function buildDev(){
@@ -2495,6 +2471,7 @@ function buildDev(){
   html+='<div class="row cheat"><b>作弊</b><button onclick="devCheat(\'hp\')">满心态</button><button onclick="devCheat(\'gold\')">+500打赏</button></div>';
   html+='<div class="row cheat"><b></b><button onclick="devCheat(\'wave\')">跳过本波</button><button onclick="devCheat(\'elite\')">召唤精英</button></div>';
   html+='<div class="row cheat"><b></b><button onclick="devCheat(\'lv\')">+1人气级</button><button class="'+(G.god?'on':'')+'" onclick="devCheat(\'god\')">无敌：'+(G.god?'开':'关')+'</button></div>';
+  html+='<div class="row cheat"><b></b><button class="'+(G.infHeat?'on':'')+'" onclick="devCheat(\'heat\')">无限元气：'+(G.infHeat?'开':'关')+'</button></div>';
   html+='<div class="hint">按 <b>`</b>(Esc下方) 开关 ｜ 任意时刻可改形态，立即在直播窗 / 场上生效</div>';
   d.innerHTML=html;
 }

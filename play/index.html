@@ -76,6 +76,25 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
   box-shadow:0 0 4px #6ae8ff55;
   animation:eqb .85s steps(6,end) infinite alternate}               /* steps() → 高度阶跃，像素感 */
 @keyframes eqb{0%{height:calc(10% + var(--lvl)*8%);opacity:.7}100%{height:calc(16% + var(--lvl)*84%);opacity:1}}
+/* 专属技能面板（侧栏底部·现场人气热度下方） */
+.skillpanel{flex:none;margin-top:8px;padding-top:8px;border-top:1px solid #3a2a4e;--ac:#7af0ea}
+.skp-top{display:flex;align-items:center;gap:7px}
+.skp-top b{font-size:13px;color:var(--cyan);text-shadow:0 0 7px currentColor;letter-spacing:.5px}
+.skp-badge{font-size:9.5px;color:#9fb0d0;padding:1px 6px;border:1px solid #3a2f55;border-radius:5px;flex:none}
+.skp-badge.act{color:#ffd24a;border-color:#ffd24a55}
+.skp-badge:empty{display:none}
+.skp-desc{font-size:10.5px;color:#b9b0d0;line-height:1.4;margin:4px 0 6px;min-height:14px}
+.skp-bar{position:relative;height:14px;background:#241c33;border-radius:4px;overflow:hidden;border:1px solid #ffffff10}
+.skp-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ac);transition:width .14s linear}
+.skp-bar>span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 9.5px Menlo,monospace;color:#e8e0ff;letter-spacing:1px}
+.skillpanel.ready .skp-bar{box-shadow:0 0 11px var(--ac);border-color:var(--ac);animation:skpul 1.15s ease-in-out infinite}
+.skillpanel.ready .skp-bar>span{color:#100a1c}
+@keyframes skpul{0%,100%{box-shadow:0 0 6px var(--ac)}50%{box-shadow:0 0 16px var(--ac)}}
+.skp-heat{display:flex;align-items:center;gap:6px;margin-top:6px}
+.skp-heat>span{font:8px Menlo,monospace;color:#9fb0d0;flex:none}
+.skp-hbar{flex:1;height:6px;background:#241c33;border-radius:3px;overflow:hidden}
+.skp-hbar>i{display:block;height:100%;width:0;background:#ffaa4a;transition:width .14s linear}
+.skp-hbar>i.full{background:#ffd27a;box-shadow:0 0 7px #ffaa4a}
 /* ---------- 画布 ---------- */
 #cv{display:block;border-radius:12px;border:1px solid var(--line);background:#0d0a16;image-rendering:pixelated}
 /* ---------- 覆盖层 ---------- */
@@ -334,13 +353,19 @@ kbd{background:#241c33;border:1px solid var(--line);border-radius:4px;padding:1p
       <div class="srow"><span class="wave" id="waveLab">WAVE 1</span><span class="timer" id="timeLab">20</span></div>
       <div class="statrow"><span class="slbl">心态</span><div class="bar hp" id="hpBar"><i></i><span></span></div></div>
       <div class="statrow"><span class="slbl">人气</span><div class="bar xp" id="xpBar"><i></i><span></span></div></div>
-      <div class="srow goldrow"><span id="gold">♥ 0</span><span id="skill"></span></div>
+      <div class="srow goldrow"><span id="gold">♥ 0</span></div>
       <div id="voteWrap">
         <button class="voteBtn like" id="likeBtn"><span class="vic">▲</span><b id="likeN">0</b></button>
         <button class="voteBtn dis"  id="disBtn"><span class="vic">▼</span><b id="disN">0</b></button>
       </div>
       <div class="voteBar"><i id="voteFill"></i><span id="voteRate">好评 50%</span></div>
       <div class="eqwrap"><div class="eqlbl">现场人气热度 <span class="eqlive">● LIVE</span></div><div class="eq" id="eq"></div></div>
+      <div id="skillPanel" class="skillpanel">
+        <div class="skp-top"><b id="skName">专属技能</b><span id="skBadge" class="skp-badge"></span></div>
+        <div id="skDesc" class="skp-desc"></div>
+        <div class="skp-bar"><i id="skFill"></i><span id="skLabel"></span></div>
+        <div id="skHeat" class="skp-heat" style="display:none"><span>元气</span><div class="skp-hbar"><i id="skHeatFill"></i></div></div>
+      </div>
     </div>
   </aside>
   <!-- 中列：游戏区 -->
