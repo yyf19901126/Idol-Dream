@@ -126,10 +126,12 @@ function drawChibi(g,x,y,mods,o){
       sy=1+(a-0.45)*0.18; sx=1/sy; hop=a*3.2;            // 果冻幅度减弱（0.34→0.18）
     }else{ hop=Math.sin(o.t*2.4)*0.6; }
     const footY=y+10;                                    // 脚底基线（缩放锚点）
-    g.save();g.translate(x,y+12);g.scale(1,.38);g.fillStyle='rgba(0,0,0,.40)';
-    g.beginPath();g.arc(0,0,tw*0.30*sx,0,7);g.fill();g.restore();   // 影子随横向挤压变宽
+    const lift=o.lift||0, al=o.alpha==null?1:o.alpha;    // lift：飞行离地（影子留在地面）；alpha：潜行半透明
+    g.save();g.translate(x,y+12);g.scale(1,.38);g.globalAlpha=al*(lift>0?Math.max(.25,1-lift/70):1);g.fillStyle='rgba(0,0,0,.40)';
+    g.beginPath();g.arc(0,0,tw*0.30*sx*(lift>0?Math.max(.5,1-lift/140):1),0,7);g.fill();g.restore();   // 影子随横向挤压变宽；飞行时变小变淡
     g.save();
-    g.translate(Math.round(x),Math.round(footY-hop));
+    g.globalAlpha=al;
+    g.translate(Math.round(x),Math.round(footY-hop-lift));
     g.scale(-o.face*sx,sy);                              // 朝向翻转（修正"倒着走"）+ 果冻挤压，锚定脚底
     g.imageSmoothingEnabled=false;                       // 粗粒度像素图：关抗锯齿，缩放仍保硬边像素块
     g.shadowColor='rgba(130,220,255,'+(0.45+0.14*Math.sin(o.t*3)).toFixed(3)+')';

@@ -955,9 +955,17 @@ function skBurst(mul){const st=_st||ST();return (58+G.wave*6)*(1+st.dmg)*(mul||1
 function skHit(cat,mul){const st=_st||ST();const c=cat==='melee'?st.dmgMelee:cat==='ranged'?st.dmgRanged:cat==='elem'?st.dmgElem:cat==='engi'?st.engi:0;return (11+G.wave*4)*(1+st.dmg+c)*(mul||1);}
 function panelCrit(){const st=_st||ST();return {c:Math.random()<st.crit,cm:st.critMult};}
 function skField(x,y,r,ttl,o){G.fields.push(Object.assign({x,y,r,ttl,t:0},o||{}));}
+/* 领域命中判定：T台压场为巨大 T 字区域，其余为圆形 */
+const T_BAR=290,T_BARH=72,T_STEM=44,T_STEMH=300;
+function inField(e,f){
+  if(f.tshape){const dx=Math.abs(e.x-f.x);
+    return (dx<=T_BAR && e.y>=f.y-T_STEMH && e.y<=f.y-T_STEMH+T_BARH) || (dx<=T_STEM && e.y>=f.y-T_STEMH && e.y<=f.y+T_STEMH);}
+  return dist2(e,f)<f.r*f.r;
+}
 function skAOE(x,y,r,dmg,o){o=o||{};fx({type:'ring',x,y,r,col:o.col||'#ff9ec4',ttl:.34});if(o.shake)addShake(o.shake);
   G.enemies.forEach(e=>{if(e.dead||e.ally||dist2(e,{x,y})>r*r)return;
     hurtEnemy(e,dmg,o.crit||false,{noTrig:1,noFx:1,sx:x,sy:y,chill:o.chill,burn:o.burn,vuln:o.vuln});
+    if(!o.silent)float(e.x+rnd(-5,5),e.y-e.r-10,(o.crit?'✦':'')+Math.round(dmg),o.crit?'#ffe14a':'#fff',{crit:o.crit,sz:o.crit?1.5:1,vy:o.crit?-10:0});
     if(o.knock&&!e.boss){const a=Math.atan2(e.y-y,e.x-x);e.x+=Math.cos(a)*o.knock;e.y+=Math.sin(a)*o.knock;}
     if(o.stun)e.stun=Math.max(e.stun||0,o.stun); if(o.fear&&!e.boss)e.fear=Math.max(e.fear||0,o.fear);
     if(o.ally&&!e.boss&&G.allies.length<10&&Math.random()<(o.ally.p||1))convertAlly(e,o.ally.pct,o.ally.ttl);});}
@@ -967,86 +975,99 @@ function freezeAll(t){G.enemies.forEach(e=>{if(!e.dead&&!e.ally){e.stun=Math.max
 function volley(n,cat,mul,col){const ts=nearestN(900,n);for(let i=0;i<n;i++){const tg=ts[i]||ts[0];if(!tg)return;const a=Math.atan2(tg.y-(P.y-20),tg.x-P.x),pc=panelCrit();
   G.bullets.push({x:P.x,y:P.y-20,vx:Math.cos(a)*300,vy:Math.sin(a)*300,dmg:skHit(cat,mul),crit:pc.c,cm:pc.cm,pierce:0,pdec:1,bounce:0,split:0,homing:1.4,chain:0,ttl:2.2,r:8,col:col||'#7af0ea',kind:'starnote',status:{},hit:new Set()});}}
 function spreadMark(from,n){let c=0;G.enemies.forEach(e=>{if(e.dead||e.ally||e===from||c>=n)return;if(dist2(e,from)<140*140){e.mark=Math.max(e.mark||0,3);c++;}});}
+function skFlame(x,y,col){fx({type:'burst',x,y,n:3,spd:70,ttl:.45,col:col||'#ff7a3a',spread:Math.PI*2});fx({type:'burst',x:x+rnd(-5,5),y:y-2,n:2,spd:40,ttl:.55,col:'#ffd24a'});}
+/* 专属武器·空格随时领取；武器栏满则替换等级最低的非招牌武器 */
+function claimWeapon(id,name){
+  const have=P.weapons.find(w=>w.id===id);
+  if(have){if(have.lvl<4){have.lvl++;toast('「'+name+'」升级 → Lv'+have.lvl);}else toast('「'+name+'」已满级');fx({type:'ring',x:P.x,y:P.y,r:50,col:'#7af0ea',ttl:.3});return;}
+  if(P.weapons.length<WEAPON_MAX){P.weapons.push({id,lvl:2,cd:0});toast('装备专属武器「'+name+'」');}
+  else{let idx=-1,lo=99;P.weapons.forEach((w,i)=>{if(/^sign/.test(w.id))return;if(w.lvl<lo){lo=w.lvl;idx=i;}});if(idx<0)idx=0;
+    const old=P.weapons[idx];P.weapons[idx]={id,lvl:2,cd:0};toast('「'+name+'」替换了 '+((WEAPONS[old.id]&&WEAPONS[old.id].name)||old.id));}
+  fx({type:'ring',x:P.x,y:P.y,r:60,col:'#7af0ea',ttl:.4});
+}
 
 /* —— 32 形态专属技能（§7）。type: active主动·绑空格 / passive被动 / weapon专属武器 —— */
 const SKILLS={
  /* 轻甜系 L-S */
- LSCYP:{type:'active',name:'全息天使降临',cd:22,dur:8,col:'#9af0ff',buff:{spd:.30,homing:.8,multishot:2},every:.35,
-   tick(){skField(P.x,P.y,38,1.1,{burn:skHit('elem',.5),col:'#ffb14a'});}},
+ LSCYP:{type:'active',name:'全息天使降临',cd:22,dur:8,col:'#9af0ff',buff:{spd:.30,homing:.8,multishot:2,fly:1},every:.2,
+   on(){skField(P.x,P.y,72,8.2,{burn:skHit('elem',.6),follow:1,flame:1,col:'#ffb14a'});},
+   tick(){skFlame(P.x+rnd(-44,44),P.y+rnd(-12,34),'#ffb14a');},
+   end(){G.fields=G.fields.filter(f=>!f.flame);}},
  LSCYT:{type:'passive',name:'电波接收',onKill(){P._wv=(P._wv||0)+1;if(P._wv>=10){P._wv=0;volley(4,'ranged',1.0,'#9af0ff');}}},
- LSCNP:{type:'active',name:'人偶剧场',cd:20,col:'#c8a8ff',on(){for(let i=0;i<4;i++)G.clones.push({x:P.x+Math.cos(i*1.57)*44,y:P.y-10+Math.sin(i*1.57)*30,ttl:6,cd:rnd(0,.6),dmg:skHit('ranged',.6),lvl:2,holo:1,crit:1,cm:ST().critMult,status:{},unit:'ai',kind:'aiCohost',bob:rnd(0,6)});}},
+ LSCNP:{type:'active',name:'人偶剧场',cd:20,col:'#c8a8ff',on(){for(let i=0;i<4;i++)G.clones.push({x:P.x+Math.cos(i*1.57)*52,y:P.y-6+Math.sin(i*1.57)*34,ttl:7,cd:rnd(0,.6),dmg:skHit('ranged',.6),lvl:2,chibi:1,tint:'#c8a8ff',mods:P.mods.slice(),crit:1,cm:ST().critMult,status:{},unit:'ai',kind:'aiCohost',bob:rnd(0,6)});fx({type:'ring',x:P.x,y:P.y,r:80,col:'#c8a8ff',ttl:.4});}},
  LSCNT:{type:'passive',name:'反差暴击',onHit(e){if(Math.random()<.25)skAOE(e.x,e.y,60,skHit('ranged',1.6),{crit:true,col:'#9b6bff'});}},
- LSBYP:{type:'active',name:'出道曲·上热搜',cd:24,col:'#ff9ec4',on(){P._convWin=4;danmaku('一曲出道，路人秒变应援军团！','sys');}},
+ LSBYP:{type:'active',name:'出道曲·上热搜',cd:24,col:'#ff9ec4',on(){P._convWin=10;fx({type:'ring',x:P.x,y:P.y,r:280,col:'#ff9ec4',ttl:.5});let c=0;G.enemies.forEach(e=>{if(c<4&&!e.dead&&!e.boss&&dist2(e,P)<280*280){convertAlly(e,.18,9);c++;}});danmaku('一曲出道，路人秒变应援军团！','sys');}},
  LSBYT:{type:'passive',name:'全网妹妹',onPickup(){P.hp=Math.min(ST().maxhp,P.hp+1);},tick(){if(P.hp<ST().maxhp*.30&&!P._sisUsed){P._sisUsed=1;skAOE(P.x,P.y,420,skHit('melee',.5),{knock:70,col:'#ff9ec4',shake:8});danmaku('全网心疼·清场！','sys');}}},
- LSBNP:{type:'active',name:'绝对零度',cd:22,col:'#aee8ff',on(){freezeAll(3.5);fx({type:'flash',ttl:.3,col:'#aee8ff'});addShake(7);}},
- LSBNT:{type:'passive',name:'读信电台',every:8,tick(){skField(P.x,P.y,110,4,{heal:2,slow:1,col:'#aee8ff'});}},
+ LSBNP:{type:'active',name:'绝对零度',cd:22,col:'#aee8ff',on(){freezeAll(3.5);fx({type:'flash',ttl:.3,col:'#aee8ff'});fx({type:'ring',x:P.x,y:P.y,r:520,col:'#aee8ff',ttl:.6,style:'frost'});addShake(7);}},
+ LSBNT:{type:'passive',name:'读信电台',every:.5,tick(){G.fields.find(f=>f.radio)||skField(P.x,P.y,135,1e9,{heal:1,slow:1,follow:1,radio:1,col:'#aee8ff'});}},
  /* 轻磁系 L-D */
- LDCYP:{type:'active',name:'台风炸裂',cd:22,dur:8,col:'#ffd24a',buff:{aspd:.25},every:2,tick(){const t=nearestEnemy(900);if(t)skAOE(t.x,t.y,120,skBurst(.6),{chill:1,col:'#ffd24a',shake:5});}},
- LDCYT:{type:'weapon',name:'义体百宝臂',weapon:'memeCannon'},
- LDCNP:{type:'active',name:'赛博低音',cd:23,dur:5,col:'#9b6bff',buff:{crit:.15},on(){skField(P.x,P.y,150,5,{slow:1,col:'#9b6bff'});skAOE(P.x,P.y,150,skBurst(.3),{col:'#9b6bff',shake:6});}},
+ LDCYP:{type:'active',name:'台风炸裂',cd:22,dur:8,col:'#ffd24a',buff:{aspd:.25},every:1.2,tick(){const t=nearestEnemy(900);if(!t)return;skAOE(t.x,t.y,135,skBurst(.6),{chill:1,col:'#bfe0ff',shake:5});fx({type:'ring',x:t.x,y:t.y,r:135,col:'#bfe0ff',ttl:.5,style:'frost'});for(let i=0;i<10;i++){const a=i*0.63+performance.now()/180;fx({type:'burst',x:t.x+Math.cos(a)*45,y:t.y+Math.sin(a)*45,n:1,spd:140,ttl:.4,col:'#cfeeff'});}}},
+ LDCYT:{type:'active',name:'义体百宝臂',cd:0,col:'#ff9a4a',weapon:'memeCannon',on(){claimWeapon('memeCannon','义体百宝臂');}},
+ LDCNP:{type:'active',name:'赛博低音',cd:23,dur:5,col:'#9b6bff',buff:{crit:.15},on(){skField(P.x,P.y,170,5,{slow:1,follow:1,bass:1,col:'#9b6bff'});skAOE(P.x,P.y,170,skBurst(.3),{col:'#9b6bff',shake:6});},
+   tick(){fx({type:'ring',x:P.x,y:P.y,r:170,col:'#9b6bff',ttl:.5,style:'soundwave'});},every:.6,end(){G.fields=G.fields.filter(f=>!f.bass);}},
  LDCNT:{type:'passive',name:'ASMR单推',every:.5,tick(){const t=nearestEnemy(500);if(t)t.asmr=2;},onKill(e){if(e.asmr>0)skAOE(e.x,e.y,70,skHit('ranged',.5),{shock:1,col:'#9b6bff'});}},
- LDBYP:{type:'active',name:'殿下接你回家',cd:20,col:'#ffe07a',on(){const t=nearestEnemy(420),a=t?Math.atan2(t.y-P.y,t.x-P.x):(P.face>0?0:Math.PI);playerDash(a,200,.2);P._dashAOE={a,n:.16};}},
- LDBYT:{type:'passive',name:'青梅陪伴',grant(){G.clones.push({x:P.x-34,y:P.y,ttl:1e9,cd:0,dmg:skHit('ranged',.25),lvl:2,holo:1,crit:0,cm:ST().critMult,status:{},unit:'ai',kind:'aiCohost',bob:0,sister:1});},tick(){if(P.hp<ST().maxhp*.30&&!P._sisGuard){P._sisGuard=1;P._shield=Math.max(P._shield||0,2);}else if(P.hp>=ST().maxhp*.30)P._sisGuard=0;}},
- LDBNP:{type:'active',name:'慵懒即兴',cd:22,dur:8,col:'#9af07a',every:.4,tick(){const es=G.enemies.filter(e=>!e.dead&&!e.ally);if(!es.length)return;const t=pick(es),a=Math.atan2(t.y-(P.y-20),t.x-P.x);G.bullets.push({x:P.x,y:P.y-20,vx:Math.cos(a)*340,vy:Math.sin(a)*340,dmg:skHit('ranged',1.2),crit:true,cm:ST().critMult,pierce:0,pdec:1,bounce:0,split:0,homing:2,chain:0,ttl:1.6,r:8,col:'#9af07a',kind:'starnote',status:{},hit:new Set()});}},
+ LDBYP:{type:'active',name:'殿下接你回家',cd:18,col:'#ffe07a',on(){let a;if(P._vx||P._vy)a=Math.atan2(P._vy,P._vx);else{const t=nearestEnemy(600);a=t?Math.atan2(t.y-P.y,t.x-P.x):(P.face>0?0:Math.PI);}P._dashCol='#ffe07a';playerDash(a,360,.24);P._dashAOE={a,n:.5,r:150};fx({type:'ring',x:P.x,y:P.y,r:60,col:'#ffe07a',ttl:.3});}},
+ LDBYT:{type:'passive',name:'青梅陪伴',grant(){G.clones.push({x:P.x-34,y:P.y,ttl:1e9,cd:0,dmg:skHit('ranged',.25),lvl:2,chibi:1,sister:1,tint:'#ff9ec4',mods:P.mods.slice(),crit:0,cm:ST().critMult,status:{},unit:'ai',kind:'aiCohost',bob:0});},tick(){if(P.hp<ST().maxhp*.30&&!P._sisGuard){P._sisGuard=1;P._shield=Math.max(P._shield||0,2);}else if(P.hp>=ST().maxhp*.30)P._sisGuard=0;}},
+ LDBNP:{type:'active',name:'慵懒即兴',cd:22,dur:8,col:'#9af07a',every:.4,tick(){const es=G.enemies.filter(e=>!e.dead&&!e.ally);if(!es.length)return;const t=pick(es),a=Math.atan2(t.y-(P.y-20),t.x-P.x);G.bullets.push({x:P.x,y:P.y-20,vx:Math.cos(a)*320,vy:Math.sin(a)*320,dmg:skHit('ranged',1.2),crit:true,cm:ST().critMult,pierce:1,pdec:1,bounce:0,split:0,homing:2.2,chain:0,ttl:1.8,r:11,col:'#9af07a',kind:'ultnote',status:{},hit:new Set()});}},
  LDBNT:{type:'passive',name:'今天也辛苦了',dmgFn(maxhp){const miss=Math.max(0,1-P.hp/maxhp);return Math.min(.4,Math.floor(miss*10)*0.08);},tick(){if(P.hp<ST().maxhp*.25&&!P._gloomUsed){P._gloomUsed=1;skAOE(P.x,P.y,420,skHit('melee',.5),{knock:70,col:'#7a7a9a',shake:8});P.hp=Math.min(ST().maxhp,P.hp+20);}}},
  /* 重甜系 H-S */
- HSCYP:{type:'active',name:'应援全开',cd:22,dur:8,col:'#7af0ea',buff:{armor:3},on(){P._cheer=8;},end(){P._cheer=0;}},
- HSCYT:{type:'passive',name:'再来一组☆',onKill(){P._grpK=(P._grpK||0)+1;P._grpT=5;if(P._grpK>=20){P._grpK=0;P._grpFix=Math.min(.30,(P._grpFix||0)+.02);}},tick(){P._grpT=Math.max(0,(P._grpT||0)-1);if(P._grpT<=0)P._grpK=0;},dmgFn(){return 0;}},
- HSCNP:{type:'active',name:'战姬展翼',cd:24,dur:8,col:'#bfe0ff',buff:{spd:.25,fly:1},repress(){const t=nearestEnemy(500),a=t?Math.atan2(t.y-P.y,t.x-P.x):0;playerDash(a,180,.18);P._dashAOE={a,n:.25,r:110};P._skT=Math.min(P._skT,.05);}},
+ HSCYP:{type:'active',name:'应援全开',cd:22,dur:8,col:'#7af0ea',buff:{armor:3},on(){P._cheer=8;fx({type:'ring',x:P.x,y:P.y,r:130,col:'#7af0ea',ttl:.5});danmaku('应援全开！','sys');},end(){P._cheer=0;}},
+ HSCYT:{type:'passive',name:'再来一组☆',onKill(){P._grpK=(P._grpK||0)+1;P._grpT=5;if(P._grpK>=20){P._grpK=0;P._grpFix=Math.min(.30,(P._grpFix||0)+.02);float(P.x,P.y-70,'增伤 +2%','#ffd24a');}},tick(){P._grpT=Math.max(0,(P._grpT||0)-1);if(P._grpT<=0)P._grpK=0;},dmgFn(){return 0;},panelStat(){return '连杀增伤 +'+Math.round((P._grpFix||0)*100)+'%（'+(P._grpK||0)+'/20）';}},
+ HSCNP:{type:'active',name:'战姬展翼',cd:24,dur:8,col:'#bfe0ff',buff:{spd:.25,fly:1},every:1.5,tick(){const t=nearestEnemy(640);if(!t)return;const a=Math.atan2(t.y-P.y,t.x-P.x);P._dashCol='#bfe0ff';playerDash(a,240,.2);P._dashAOE={a,n:.45,r:120};fx({type:'ring',x:P.x,y:P.y,r:70,col:'#bfe0ff',ttl:.3});}},
  HSCNT:{type:'passive',name:'贴身护卫',onGuard(){skAOE(P.x,P.y,90,skHit('melee',1.5),{crit:true,col:'#8fd0ff'});}},
- HSBYP:{type:'active',name:'盛夏狂欢',cd:22,dur:6,col:'#ffe07a',every:.5,on(){P._ballA=rnd(0,6.28);},tick(){G.enemies.forEach(e=>{if(!e.dead&&!e.ally){e.burn=Math.max(e.burn||0,1.5);e.burnDps=Math.max(e.burnDps||0,skHit('elem',.5));}});const t=nearestEnemy(900);if(t)skAOE(t.x,t.y,70,skHit('elem',1.8),{col:'#ffd24a'});}},
- HSBYT:{type:'passive',name:'大胃王',onPickup(){P._eat=(P._eat||0)+1;P._eatFix=Math.min(.30,(P._eat)*0.01);if(P._eat%10===0)skAOE(P.x,P.y,140,skHit('melee',3),{knock:40,col:'#ffd24a',shake:5});},dmgFn(){return 0;}},
- HSBNP:{type:'active',name:'T台压场',cd:20,dur:5,col:'#ff7bc1',buff:{crit:.15},on(){skField(P.x,P.y,150,5,{slow:1,vuln:.30,col:'#ff7bc1'});}},
- HSBNT:{type:'passive',name:'优雅下午茶',every:.5,tick(){/* 常驻领域刷新（见 grant 持续场）*/G.fields.find(f=>f.tea)||skField(P.x,P.y,140,1e9,{slow:1,tea:1,col:'#e0b0ff'});const f=G.fields.find(f=>f.tea);if(f){f.x=P.x;f.y=P.y;f.t=0;}},onKill(e){if(dist2(e,P)<140*140){G.gold+=2;G.totalGold+=2;}}},
+ HSBYP:{type:'active',name:'盛夏狂欢',cd:22,dur:6,col:'#ff7a3a',every:.4,tick(){G.enemies.forEach(e=>{if(!e.dead&&!e.ally){e.burn=Math.max(e.burn||0,1.5);e.burnDps=Math.max(e.burnDps||0,skHit('elem',.5));}});const t=nearestEnemy(900);if(t){skAOE(t.x,t.y,82,skHit('elem',1.6),{burn:skHit('elem',.5),col:'#ff7a3a'});skFlame(t.x,t.y,'#ff7a3a');}skFlame(P.x+rnd(-30,30),P.y+rnd(-20,24),'#ffd24a');}},
+ HSBYT:{type:'passive',name:'大胃王',onPickup(){P._eat=(P._eat||0)+1;P._eatFix=Math.min(.30,(P._eat)*0.01);P._eatScale=Math.min(.6,(P._eat%10)*0.06);if(P._eat%10===0){P._eatScale=0;skAOE(P.x,P.y,175,skHit('melee',3.5),{knock:60,col:'#ffd24a',shake:7});fx({type:'ring',x:P.x,y:P.y,r:175,col:'#ffd24a',ttl:.45});float(P.x,P.y-72,'嗝—!','#ffd24a');}},dmgFn(){return 0;}},
+ HSBNP:{type:'active',name:'T台压场',cd:20,dur:6,col:'#ff7bc1',buff:{crit:.15},on(){skField(AW/2,AH/2,0,6,{tshape:1,slow:1,vuln:.30,col:'#ff7bc1'});fx({type:'flash',ttl:.2,col:'#ff7bc1'});addShake(6);danmaku('T台压场——全员定在聚光灯下！','sys');},end(){G.fields=G.fields.filter(f=>!f.tshape);}},
+ HSBNT:{type:'passive',name:'优雅下午茶',every:1,tick(){G.fields.find(f=>f.tea)||skField(P.x,P.y,150,1e9,{slow:1,tea:1,follow:1,col:'#e0b0ff'});},onKill(e){if(dist2(e,P)<150*150){G.gold+=2;G.totalGold+=2;}}},
  /* 重磁系 H-D */
- HDCYP:{type:'active',name:'舞台喷火',cd:23,dur:8,col:'#ff7a3a',buff:{aspd:.20},every:.25,tick(){const a=P.face>0?0:Math.PI;for(let i=-1;i<=1;i++){const aa=a+i*0.5,d=rnd(60,200);const x=P.x+Math.cos(aa)*d,y=P.y-20+Math.sin(aa)*d;G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,{x,y})<2000){e.burn=Math.max(e.burn||0,1.5);e.burnDps=Math.max(e.burnDps||0,skHit('elem',.6));}});fx({type:'burst',x,y,n:2,spd:80,ttl:.3,col:'#ff7a3a'});}}},
- HDCYT:{type:'weapon',name:'机车炮台',weapon:'camTurret'},
- HDCNP:{type:'active',name:'歌剧魅影',cd:24,dur:3,col:'#9b6bff',buff:{spd:.20,stealth:1},end(){const t=nearestEnemy(500),x=t?t.x:P.x,y=t?t.y:P.y;skAOE(x,y,100,skHit('ranged',3),{crit:true,fear:1.5,col:'#9b6bff',shake:7});}},
+ HDCYP:{type:'active',name:'舞台喷火',cd:23,dur:8,col:'#ff7a3a',buff:{aspd:.20},every:.12,tick(){const base=P.face>0?0:Math.PI;for(let i=-1;i<=1;i++){const aa=base+i*0.42,d=rnd(50,235);const x=P.x+Math.cos(aa)*d,y=P.y-20+Math.sin(aa)*d;G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,{x,y})<2700){e.burn=Math.max(e.burn||0,1.8);e.burnDps=Math.max(e.burnDps||0,skHit('elem',.6));}});skFlame(x,y,'#ff7a3a');}fx({type:'burst',x:P.x+Math.cos(base)*70,y:P.y-20,n:4,spd:220,ttl:.35,col:'#ffd24a',spread:0.9});}},
+ HDCYT:{type:'active',name:'机车炮台',cd:0,col:'#7af0ea',weapon:'camTurret',on(){claimWeapon('camTurret','机车炮台');}},
+ HDCNP:{type:'active',name:'歌剧魅影',cd:24,dur:3,col:'#9b6bff',buff:{spd:.20,stealth:1},on(){for(let i=0;i<12;i++)fx({type:'burst',x:P.x,y:P.y-20,n:1,spd:130,ttl:.45,col:'#9b6bff'});fx({type:'ring',x:P.x,y:P.y,r:50,col:'#9b6bff',ttl:.3});},end(){const t=nearestEnemy(520),x=t?t.x:P.x,y=t?t.y:P.y;skAOE(x,y,120,skHit('ranged',3.2),{crit:true,fear:1.5,col:'#9b6bff',shake:7});fx({type:'ring',x,y,r:120,col:'#9b6bff',ttl:.5});}},
  HDCNT:{type:'passive',name:'一键入侵',onKill(e){if(Math.random()<.30){let n=null,bd=200*200;G.enemies.forEach(o=>{if(o.dead||o.ally)return;const d=dist2(o,e);if(d<bd){bd=d;n=o;}});if(n)convertAlly(n,.2,5);}}},
- HDBYP:{type:'active',name:'全场跳起来',cd:22,dur:6,col:'#ff5a7a',on(){P._moshT=6;danmaku('全场蹦迪，互撞起来！','sys');}},
+ HDBYP:{type:'active',name:'全场跳起来',cd:22,dur:6,col:'#ff5a7a',on(){P._moshT=6;G.enemies.forEach(e=>{e._mvx=undefined;});danmaku('全场蹦迪，互撞起来！','sys');}},
  HDBYT:{type:'passive',name:'人生咨询室',onGold(){if((P._toastCd||0)<=0){P._toastCd=3;P.hp=Math.min(ST().maxhp,P.hp+2);P._allBuff=3;}}},
- HDBNP:{type:'active',name:'至暗独舞',cd:22,dur:2,col:'#6a6a8a',buff:{noContact:1},on(){skAOE(P.x,P.y,160,skHit('melee',.4),{stun:2,vuln:.30,col:'#6a6a8a',shake:6});}},
+ HDBNP:{type:'active',name:'至暗独舞',cd:22,dur:3,col:'#8a7ad0',buff:{noContact:1},on(){skAOE(P.x,P.y,180,skHit('melee',.6),{stun:2.5,vuln:.30,col:'#8a7ad0',shake:7});fx({type:'ring',x:P.x,y:P.y,r:180,col:'#8a7ad0',ttl:.5});skField(P.x,P.y,120,3,{slow:1,follow:1,dark:1,col:'#8a7ad0'});},end(){G.fields=G.fields.filter(f=>!f.dark);}},
  HDBNT:{type:'passive',name:'深夜醺然',dmgFn(){return Math.min(.4,G.wave*0.015);},onCrit(e){e.boozed=2;}},
 };
 /* —— 32 专属技能·一句话说明（HUD / 暂停面板共用） —— */
 const SKILL_DESC={
- LSCYP:'化身全息天使8秒：飞射·追踪·多重，脚下灼烧领域',
- LSCYT:'每击倒10名观众，自动齐射4连',
- LSCNP:'召唤4具全息人偶分身助战6秒',
- LSCNT:'命中25%概率触发一次暴击范围爆发',
- LSBYP:'短时间内击倒的观众转化为应援军团',
- LSBYT:'拾取回心态；濒死自动清场击退',
- LSBNP:'全场冰冻3.5秒',
- LSBNT:'每8秒脚下展开治疗+减速领域',
- LDCYP:'8秒手速暴涨，周期向最远敌投落冰爆',
- LDCYT:'解锁专属武器·义体百宝臂',
- LDCNP:'脚下展开减速领域并震荡爆发',
- LDCNT:'锁定单体麻痹，击杀触发感电爆发',
- LDBYP:'冲刺突进，落点造成范围伤害',
- LDBYT:'常驻青梅分身助战，濒死给护盾',
- LDBNP:'8秒自动甩出追踪暴击星弹',
- LDBNT:'心态越低伤害越高；濒死回血清场',
- HSCYP:'8秒高抗压，反弹接触伤害',
- HSCYT:'连杀累积，叠满转永久增伤',
- HSCNP:'8秒飞行加速，可再按空格俯冲突进',
- HSCNT:'自动格挡近身攻击并反弹爆发',
- HSBYP:'6秒全场点燃+精准爆破',
- HSBYT:'吃越多越强，每10个触发震退',
- HSBNP:'5秒减速+易伤领域，自身暴击up',
- HSBNT:'常驻减速领域，领域内击杀生金',
- HDCYP:'8秒朝前喷射火焰，持续点燃',
- HDCYT:'解锁专属武器·机车炮台',
- HDCNP:'潜行3秒，结束瞬间致命爆发+恐惧',
- HDCNT:'击杀30%概率策反邻近观众',
- HDBYP:'6秒全场蹦迪，敌人互撞掉血',
- HDBYT:'收到打赏回心态并给全队增益',
- HDBNP:'免接触并眩晕+易伤全场',
- HDBNT:'随波次成长增伤，暴击使敌微醺',
+ LSCYP:'化身天使飞行8s：移速+30%、子弹追踪+多重，脚下持续灼烧领域',
+ LSCYT:'每击倒10名观众，自动追踪齐射4连',
+ LSCNP:'召唤4个人型分身(7s)，各自索敌射击',
+ LSCNT:'命中25%概率触发一次范围暴击爆发',
+ LSBYP:'立即转化4名路人，10s内击倒的也转为应援军团',
+ LSBYT:'拾取打赏回1心态；心态<30%自动清场击退一次',
+ LSBNP:'全场冻结3.5s',
+ LSBNT:'脚下常驻领域、跟随移动：减速敌人+持续回血',
+ LDCYP:'8s手速+25%，每1.2s向最远敌投落冰爆台风',
+ LDCYT:'空格领取专属武器·梗图加农炮（已有则升级/满栏替换）',
+ LDCNP:'5s暴击+15%，脚下跟随低音领域减速全场',
+ LDCNT:'锁定单体麻痹，将其击倒触发感电爆发',
+ LDBYP:'沿当前方向冲刺360，落点造成范围伤害+击退',
+ LDBYT:'常驻青梅人型分身随身射击；濒死自动给护盾',
+ LDBNP:'8s持续甩出穿透追踪的大招星音弹（必暴击）',
+ LDBNT:'心态每缺10%增伤+8%(上限40%)；濒死回血清场',
+ HSCYP:'8s抗压+3、反弹接触伤害，召唤分身手速+60%',
+ HSCYT:'连杀20累计永久增伤+2%（上限30%）',
+ HSCNP:'飞行8s，自动俯冲突袭最近敌（落点范围伤害）',
+ HSCNT:'自动格挡近身攻击，并反弹一次范围爆发',
+ HSBYP:'6s全场点燃，并连续精准打击最近敌',
+ HSBYT:'吃打赏变大增伤，每10个打嗝缩小+范围震退',
+ HSBNP:'地图正中展开巨大T字领域6s，减速+易伤30%',
+ HSBNT:'常驻跟随领域减速；领域内击倒额外+2打赏',
+ HDCYP:'8s朝面向持续喷射火焰，高额点燃',
+ HDCYT:'空格领取专属武器·机车炮台（已有则升级/满栏替换）',
+ HDCNP:'潜行3s（透明·不攻击），结束瞬间致命爆发+恐惧',
+ HDCNT:'击倒30%概率策反邻近一名观众(5s)',
+ HDBYP:'6s全场蹦迪乱窜，敌人互撞持续掉血',
+ HDBYT:'每次收到打赏回2心态，并给全队短暂增益',
+ HDBNP:'免接触3s，眩晕+易伤全场，脚下暗影减速',
+ HDBNT:'随波次成长增伤(上限40%)，暴击使敌微醺(下击翻倍)',
 };
 
 function grantFormSkill(){
   const code=P.mods.join(''); const sk=SKILLS[code]; if(!sk)return;
-  P.activeSkill=null; P.passiveSkill=null;
+  P.activeSkill=null; P.passiveSkill=null; P._eatScale=0; P._cheer=0; P._moshT=0; P._skT=0;
   if(sk.type==='active'){P.activeSkill=sk;P.skillCd=0;}
   else if(sk.type==='passive'){P.passiveSkill=sk;if(sk.grant)sk.grant();}
   else if(sk.type==='weapon'){const have=P.weapons.find(w=>w.id===sk.weapon);if(have)have.lvl=Math.min(4,have.lvl+1);else if(P.weapons.length<WEAPON_MAX)P.weapons.push({id:sk.weapon,lvl:2,cd:0});else{P._pendWeapon=sk.weapon;toast('武器槽满！卖一把可换上「'+sk.name+'」');}}
@@ -1059,23 +1080,38 @@ function castSkill(){
   if(P.skillCd>0)return;
   P.skillCd=sk.cd*(A('automation')?.75:1);
   if(sk.dur){P._skT=sk.dur;P._skTick=0;}
+  if(sk.weapon){ if(sk.on)sk.on(); return; }            // 专属武器·空格领取：不放大招演出
   fx({type:'ring',x:P.x,y:P.y,r:180,col:sk.col||'#ff7bc1',ttl:.5}); fx({type:'flash',ttl:.18,col:sk.col||'#ff9ec4'});
   addShake(8); hitStop(.06); sfx('skill'); danmaku('技能·'+sk.name+'！','sys');
   if(sk.on)sk.on();
 }
 /* 技能/buff/领域/友军/mosh/dash 每帧推进 */
 function skTick(dt){
+  /* 冲刺位移：playerDash 设置的速度在这里真正生效（之前从未被消费） */
+  if(P._dashT>0){P._dashT-=dt;P.x=clamp(P.x+P._dashVx*dt,WALL+10,AW-WALL-10);P.y=clamp(P.y+P._dashVy*dt,WALL+34,AH-WALL-4);P.moving=true;
+    fx({type:'burst',x:P.x,y:P.y-18,n:1,spd:30,ttl:.18,col:P._dashCol||'#ffe07a'});}                  // 冲刺残影
   if(P._skT>0){const sk=P.activeSkill;P._skT-=dt;if(sk&&sk.tick){P._skTick=(P._skTick||0)+dt;const ev=sk.every||.5;while(P._skTick>=ev){P._skTick-=ev;sk.tick();}}if(P._skT<=0&&sk&&sk.end)sk.end();}
   if(P.passiveSkill&&P.passiveSkill.tick){P._pasTick=(P._pasTick||0)+dt;const iv=P.passiveSkill.every||1;while(P._pasTick>=iv){P._pasTick-=iv;P.passiveSkill.tick();}}
   P._moshT=Math.max(0,(P._moshT||0)-dt);P._hype=Math.max(0,(P._hype||0)-dt);P._convWin=Math.max(0,(P._convWin||0)-dt);
   P._allBuff=Math.max(0,(P._allBuff||0)-dt);P._toastCd=Math.max(0,(P._toastCd||0)-dt);P._guardCd=Math.max(0,(P._guardCd||0)-dt);
-  /* mosh：敌人乱撞掉血 */
-  if(P._moshT>0){G.enemies.forEach(e=>{if(e.dead||e.boss||e.ally)return;e.x+=Math.cos(e.gait*2.3+e.x)*e.spd*dt*.7;e.y+=Math.sin(e.gait*1.9+e.y)*e.spd*dt*.7;e._moshCd=(e._moshCd||0)-dt;if(e._moshCd<=0){for(const o of G.enemies){if(o!==e&&!o.dead&&!o.ally&&dist2(o,e)<((e.r+o.r+4)**2)){e._moshCd=.6;hurtEnemy(e,skHit('melee',.8),false,{noTrig:1,noFx:1,sx:o.x,sy:o.y});break;}}}});}
+  /* mosh：全场蹦迪——给每个敌人一个持续乱窜速度，撞墙反弹、互撞掉血+弹开 */
+  if(P._moshT>0){G.enemies.forEach(e=>{if(e.dead||e.boss||e.ally)return;
+    if(e._mvx===undefined||Math.random()<.025){const a=rnd(0,6.28),sp=(e.spd||50)*2.4;e._mvx=Math.cos(a)*sp;e._mvy=Math.sin(a)*sp;}
+    e.x+=e._mvx*dt;e.y+=e._mvy*dt;
+    if(e.x<WALL+12||e.x>AW-WALL-12){e._mvx*=-1;e.x=clamp(e.x,WALL+12,AW-WALL-12);}
+    if(e.y<WALL+12||e.y>AH-WALL-12){e._mvy*=-1;e.y=clamp(e.y,WALL+12,AH-WALL-12);}
+    e._hop=Math.abs(Math.sin(P._moshT*9+e.x*.08))*7;                                   // 蹦迪跳动(渲染用)
+    e._moshCd=(e._moshCd||0)-dt;
+    if(e._moshCd<=0){for(const o of G.enemies){if(o!==e&&!o.dead&&!o.ally&&dist2(o,e)<((e.r+o.r+6)**2)){
+      e._moshCd=.45;hurtEnemy(e,skHit('melee',.8),false,{noTrig:1,sx:o.x,sy:o.y});
+      const a=Math.atan2(e.y-o.y,e.x-o.x),sp=(e.spd||50)*2.4;e._mvx=Math.cos(a)*sp;e._mvy=Math.sin(a)*sp;break;}}}
+  });}else if(G.enemies.some(e=>e._hop)){G.enemies.forEach(e=>{e._hop=0;e._mvx=undefined;});}
   /* 领域 */
   G.fields.forEach(f=>{f.t+=dt;f._tk=(f._tk||0)+dt;const tk=f._tk>=.5;if(tk)f._tk=0;
-    if(f.slow)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,f)<f.r*f.r)e.slow=Math.max(e.slow,(1-(f.slowPct||.4))<.5?.4:.4);});
-    if(f.vuln)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,f)<f.r*f.r){e.vuln=Math.max(e.vuln||0,.6);e.vulnP=Math.max(e.vulnP||0,f.vuln);}});
-    if(tk&&f.burn)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&dist2(e,f)<f.r*f.r){e.burn=Math.max(e.burn||0,1.2);e.burnDps=Math.max(e.burnDps||0,f.burn);}});
+    if(f.follow){f.x=P.x;f.y=P.y;}                                                      // 实时跟随玩家(无延迟)
+    if(f.slow)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&inField(e,f))e.slow=Math.max(e.slow,.4);});
+    if(f.vuln)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&inField(e,f)){e.vuln=Math.max(e.vuln||0,.6);e.vulnP=Math.max(e.vulnP||0,f.vuln);}});
+    if(tk&&f.burn)G.enemies.forEach(e=>{if(!e.dead&&!e.ally&&inField(e,f)){e.burn=Math.max(e.burn||0,1.2);e.burnDps=Math.max(e.burnDps||0,f.burn);}});
     if(tk&&f.heal&&dist2(P,f)<f.r*f.r)P.hp=Math.min(ST().maxhp,P.hp+(f.heal||0));});
   G.fields=G.fields.filter(f=>f.t<f.ttl);
   /* 友军 */
@@ -1135,7 +1171,7 @@ const FX_STYLE={
   kiss:'heart', hiNote:'beam', card:'card', cardRain:'card', disc:'disc', camera:'photo',
   sling:'pellet', autotune:'wave', giftRPG:'rocket', bagMissile:'rocket', signLD:'bomb',
   memeCannon:'emoji', sparkler:'ember', readFreeze:'shard', cringeArc:'bolt', hitpiece:'paper',
-  signLS:'starnote', holo:'spark',
+  signLS:'starnote', holo:'spark', ultnote:'ultnote',
   /* nova 环 */
   flash:'flashring', bass:'soundwave', pillowHammer:'shock', candle:'flamering',
   chiller:'frost', projector:'electric', dmShield:'shieldring', signHS:'shock', signHD:'wallring',
@@ -1286,8 +1322,9 @@ function update(dt){
     if(G.tIncome>4){G.tIncome=0;const v=1+Math.floor(G.wave*.8);G.gold+=v;G.totalGold+=v;
       if(Math.random()<.5)danmaku('投喂了 打赏×'+v,'fan');}
   }
-  /* 武器 */
-  P.weapons.forEach(w=>{
+  /* 武器（潜行/歌剧魅影期间不出手） */
+  const _stealth=P._skT>0&&P.activeSkill&&P.activeSkill.buff&&P.activeSkill.buff.stealth;
+  if(!_stealth)P.weapons.forEach(w=>{
     const d=WEAPONS[w.id];
     if(d.type==='orbit')return;
     w.cd-=dt*(1+st.aspd);
@@ -1319,9 +1356,9 @@ function update(dt){
     }
   });
   G.enemies.forEach(e=>{if(e.mirrorCd)e.mirrorCd-=dt;});
-  /* 分身 */
+  /* 分身（应援全开：分身手速+60%） */
   G.clones.forEach(c=>{
-    c.ttl-=dt;c.cd-=dt;
+    c.ttl-=dt;c.cd-=dt*(P._cheer>0?1.6:1);
     if(c.cd<=0){
       const t=nearestEnemy.call(null,340);
       let best=null,bd=340*340;
@@ -1662,6 +1699,11 @@ function drawBulletShape(ctx,b,now){
   else if(shape==='starnote'){ctx.save();ctx.translate(x,y);ctx.fillStyle=col;
     for(let i=0;i<4;i++){const a=now/300+i*Math.PI/2;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*9,Math.sin(a)*9);ctx.lineTo(Math.cos(a+.5)*3.2,Math.sin(a+.5)*3.2);ctx.closePath();ctx.fill();}
     ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,3,0,7);ctx.fill();ctx.restore();}
+  else if(shape==='ultnote'){ctx.save();ctx.translate(x,y);const pr=1+0.22*Math.sin(now/80);  // 大招专属弹：发光大星音+彗尾，明显区别普通子弹
+    ctx.shadowBlur=24;ctx.globalAlpha=.45;ctx.fillStyle=col;ctx.beginPath();ctx.arc(0,0,(r+6)*pr,0,7);ctx.fill();ctx.globalAlpha=1;
+    ctx.save();ctx.rotate(ang);ctx.globalAlpha=.4;ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(-26,0);ctx.lineTo(-4,-5);ctx.lineTo(-4,5);ctx.closePath();ctx.fill();ctx.restore();
+    ctx.fillStyle=col;for(let i=0;i<5;i++){const a=now/200+i*1.2566;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*(r+5),Math.sin(a)*(r+5));ctx.lineTo(Math.cos(a+.4)*4.2,Math.sin(a+.4)*4.2);ctx.closePath();ctx.fill();}
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,r*.6+2,0,7);ctx.fill();ctx.restore();}
   else{ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
     ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.globalAlpha=.9;ctx.beginPath();ctx.arc(x,y,r*.42,0,7);ctx.fill();ctx.globalAlpha=1;}
 }
@@ -1714,9 +1756,19 @@ function render(){
     ctx.restore();
   });
   /* 技能领域（地面层） */
-  G.fields.forEach(f=>{const T=performance.now();ctx.save();
-    ctx.globalAlpha=.10+Math.sin(T/200)*.04;ctx.fillStyle=f.col||'#9b6bff';ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,7);ctx.fill();
-    ctx.globalAlpha=.45;ctx.strokeStyle=f.col||'#9b6bff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,7);ctx.stroke();ctx.restore();});
+  G.fields.forEach(f=>{const T=performance.now(),col=f.col||'#9b6bff';ctx.save();
+    if(f.tshape){                                        // T台压场：发光 T 字聚光区
+      ctx.globalAlpha=.16+Math.sin(T/220)*.05;ctx.fillStyle=col;
+      ctx.fillRect(f.x-T_BAR,f.y-T_STEMH,T_BAR*2,T_BARH);ctx.fillRect(f.x-T_STEM,f.y-T_STEMH,T_STEM*2,T_STEMH*2);
+      ctx.globalAlpha=.6;ctx.shadowColor=col;ctx.shadowBlur=18;ctx.strokeStyle=col;ctx.lineWidth=3;
+      ctx.strokeRect(f.x-T_BAR,f.y-T_STEMH,T_BAR*2,T_BARH);ctx.strokeRect(f.x-T_STEM,f.y-T_STEMH+T_BARH,T_STEM*2,T_STEMH*2-T_BARH);
+      ctx.restore();return;}
+    const pulse=f.flame?(1+Math.sin(T/90+f.x)*.10):1;
+    ctx.globalAlpha=(f.flame?.16:.10)+Math.sin(T/200)*.04;ctx.fillStyle=col;ctx.beginPath();ctx.arc(f.x,f.y,f.r*pulse,0,7);ctx.fill();
+    ctx.globalAlpha=f.flame?.6:.45;ctx.shadowColor=col;ctx.shadowBlur=f.flame?14:6;ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.arc(f.x,f.y,f.r*pulse,0,7);ctx.stroke();
+    if(f.flame){ctx.globalAlpha=.5;for(let i=0;i<6;i++){const a=T/300+i*1.047,rr=f.r*(.5+.4*((i*.21+T/1300)%1));ctx.fillStyle='#ffd24a';ctx.beginPath();ctx.arc(f.x+Math.cos(a)*rr,f.y+Math.sin(a)*rr,2.6,0,7);ctx.fill();}}
+    else if(f.radio||f.bass){ctx.globalAlpha=.4;ctx.lineWidth=1.5;for(let i=1;i<=2;i++){ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.5+i*.22)*pulse,0,7);ctx.stroke();}}
+    ctx.restore();});
   /* 友军（圈来的观众，青色辉光 + 头顶心标记） */
   G.allies.forEach(a=>{ctx.save();ctx.shadowColor='#46e8ff';ctx.shadowBlur=9;ctx.translate(a.x,a.y+a.r);if(P.x<a.x)ctx.scale(-1,1);
     const img=ENEMY_IMG[a.type]||ENEMY_IMG[a.tex];
@@ -1734,7 +1786,14 @@ function render(){
   /* 召唤物（按召唤武器画不同形态） */
   G.clones.forEach(c=>{
     const u=c.unit||'holo', bob=Math.sin(performance.now()/300+(c.bob||0))*3;
-    if(u==='holo'){
+    if(c.chibi){                                          // 人型分身（人偶/青梅）：画成和主角一样的Q版人，半透明+染色辉光
+      const sc=c.sister?0.84:0.74, tint=c.tint||'#7af0ea';
+      ctx.save();ctx.translate(c.x,c.y+bob);ctx.scale(sc,sc);
+      ctx.globalAlpha=c.sister?0.95:(0.62+Math.sin(performance.now()/150+(c.bob||0))*0.12);
+      drawChibi(ctx,0,0,c.mods||P.mods,{face:P.x<c.x?-1:1,moving:false,run:0,t:performance.now()/1000+(c.bob||0),hit:0});
+      ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.18;ctx.fillStyle=tint;
+      ctx.beginPath();ctx.arc(0,-22,18,0,7);ctx.fill();ctx.restore();
+    }else if(u==='holo'){
       const w=HOLO.width*1.8,h=HOLO.height*1.8;
       ctx.save();ctx.globalAlpha=.6+Math.sin(performance.now()/120)*.15;
       ctx.shadowColor='#7af0ea';ctx.shadowBlur=14;ctx.imageSmoothingEnabled=false;
@@ -1880,13 +1939,18 @@ function updateSkillPanel(){
   else { name='专属技能'; desc=P.mods.length<5?'完成5次改造·出道后解锁':''; badge=''; }
   const col=(def&&def.col)||'#7af0ea';
   let frac=1,label='',ready=false,dim=false;
-  if(mode==='active'){
+  if(def&&def.weapon){                                   // 专属武器·空格领取
+    const have=P.weapons.find(w=>w.id===def.weapon);
+    if(have){frac=1;label='已装备 · 空格升级';dim=true;}else{frac=1;label='空格 · 装备专属武器';ready=true;}
+    badge='专属武器';
+  } else if(mode==='active'){
     if(P._skT>0){frac=Math.max(0,P._skT/(def.dur||1));label='演出中 '+P._skT.toFixed(1)+'s';}
     else if(P.skillCd>0){const full=def.cd*(A('automation')?.75:1);frac=Math.max(0,1-P.skillCd/full);label='CD '+Math.ceil(P.skillCd)+'s';dim=true;}
     else{frac=1;label='ULTRA · 空格';ready=true;}
   } else if(mode==='passive'){ frac=1;label='常驻被动';dim=true; }
   else if(mode==='weapon'){ frac=1;label=P._pendWeapon?'待装备(武器栏满)':'已装备·专属武器';dim=true; }
   else { frac=0;label='未解锁'; }
+  if(def&&def.panelStat){desc=def.panelStat();}          // 动态属性展示（如·再来一组 连杀增伤）
   panel.style.setProperty('--ac',col);
   panel.classList.toggle('ready',ready);
   const nEl=$('skName');nEl.textContent=name;nEl.style.color=col;
@@ -1900,7 +1964,7 @@ function updateSkillPanel(){
 function drawEnemy(e){
   const img=ENEMY_IMG[e.type]||ENEMY_IMG[e.tex];      // 新Boss无专属贴图→用映射的现有贴图
   ctx.save();
-  ctx.translate(e.x,e.y+e.r);                            // 脚底基线
+  ctx.translate(e.x,e.y+e.r-((P._moshT>0&&e._hop)||0)); // 脚底基线（mosh蹦迪离地）
   /* 果冻形变：随步态相位的挤压拉伸 + 横向晃动 + 轻微弹跳（绕脚底，越动越Q弹） */
   const jg=e.gait||0, js=Math.sin(jg), jc=Math.cos(jg);
   const jamp=e.boss?0.05:(e.elite||e.mini?0.07:0.12);   // 体型越大越稳，小怪最Q弹
@@ -1964,7 +2028,20 @@ function drawOrbitWeapons(){                               // 佩戴武器环绕
   }
 }
 function drawPlayer(){
-  drawChibi(ctx,P.x,P.y,P.mods,{face:P.face,moving:P.moving,run:P.bob,t:performance.now()/1000,hit:P.hitFlash||0});
+  const b=(P._skT>0&&P.activeSkill&&P.activeSkill.buff)||0;
+  const fly=b&&b.fly?28+Math.sin(performance.now()/220)*6:0;        // 战姬展翼/天使：真飞起来（影子拉开）
+  const alpha=b&&b.stealth?0.3:1;                                    // 歌剧魅影：潜行半透明
+  const grow=Math.min(1.7,1+(P._eatScale||0));                      // 大胃王：吃越多越大
+  /* 应援全开发光光环 */
+  if(P._cheer>0){ctx.save();ctx.globalCompositeOperation='lighter';const pr=46+Math.sin(performance.now()/120)*8;
+    const gr=ctx.createRadialGradient(P.x,P.y-22,4,P.x,P.y-22,pr);gr.addColorStop(0,'#7af0ea66');gr.addColorStop(1,'#7af0ea00');
+    ctx.fillStyle=gr;ctx.beginPath();ctx.arc(P.x,P.y-22,pr,0,7);ctx.fill();ctx.restore();}
+  if(fly){ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.5;   // 飞行光翼
+    ctx.fillStyle=b.col||'#bfe0ff';for(let i=0;i<2;i++){const sgn=i?1:-1;ctx.beginPath();
+      ctx.ellipse(P.x+sgn*16,P.y-30-fly,9,20,sgn*0.5,0,7);ctx.fill();}ctx.restore();}
+  if(grow!==1){ctx.save();ctx.translate(P.x,P.y);ctx.scale(grow,grow);
+    drawChibi(ctx,0,0,P.mods,{face:P.face,moving:P.moving,run:P.bob,t:performance.now()/1000,hit:P.hitFlash||0,lift:fly,alpha});ctx.restore();}
+  else drawChibi(ctx,P.x,P.y,P.mods,{face:P.face,moving:P.moving,run:P.bob,t:performance.now()/1000,hit:P.hitFlash||0,lift:fly,alpha});
   drawOrbitWeapons();
   /* 元气条已移至左下角技能面板（取消角色头顶条） */
 }
