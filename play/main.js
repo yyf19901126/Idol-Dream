@@ -2091,7 +2091,7 @@ function fmtStat(v,f){
 }
 function pauseModal(){
   const st=ST(),code=P.mods.join('')||'_',f=playerForm(P.mods);
-  const art=(typeof KEYART_SRC!=='undefined'&&KEYART_SRC[code])||'art/uncle.png';
+  const art=(typeof KEYART_SRC!=='undefined'&&KEYART_SRC[code])||'art/keyart/uncle.png';
   // 套装
   const sets=Object.keys(P.setN).filter(s=>P.setN[s]>0).map(s=>{const n=P.setN[s],need=(typeof SETS!=='undefined'&&SETS[s]?SETS[s].n:3);
     return `<span class="pset ${n>=need?'on':''}">${s} ${n}/${need}</span>`;}).join('');

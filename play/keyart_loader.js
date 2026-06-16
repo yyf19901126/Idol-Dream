@@ -2,13 +2,13 @@
    用户把每个形态的立绘 PNG 放进 play/art/，在 KEYART_SRC 里按「形态码」登记：
      ''(原点)→'_' ｜ 改造①='L'/'H' ｜ ②='LS'/'LD'/'HS'/'HD' ｜ ③=三字 ｜ ④=四字 ｜ ⑤(终态)=五字(如'LSCYP')
    加载时自动：去白底（边缘 flood-fill + 去封闭白块）+ 紧裁；并按 KEYART_CHIBI 裁出「头」给 Q版当大头。 */
-const KEYART_SRC={'_':'art/uncle.png'};      // 自动登记全部 63 形态码
+const KEYART_SRC={'_':'art/keyart/uncle.png'};      // 立绘都在 art/keyart/，自动登记全部 63 形态码
 (function(){
-  for(const a of ['L','H']){KEYART_SRC[a]='art/'+a+'.png';
-    for(const b of ['S','D']){KEYART_SRC[a+b]='art/'+a+b+'.png';
-      for(const c of ['C','B']){KEYART_SRC[a+b+c]='art/'+a+b+c+'.png';
-        for(const d of ['Y','N']){KEYART_SRC[a+b+c+d]='art/'+a+b+c+d+'.png';
-          for(const e of ['P','T'])KEYART_SRC[a+b+c+d+e]='art/'+a+b+c+d+e+'.png';}}}}
+  for(const a of ['L','H']){KEYART_SRC[a]='art/keyart/'+a+'.png';
+    for(const b of ['S','D']){KEYART_SRC[a+b]='art/keyart/'+a+b+'.png';
+      for(const c of ['C','B']){KEYART_SRC[a+b+c]='art/keyart/'+a+b+c+'.png';
+        for(const d of ['Y','N']){KEYART_SRC[a+b+c+d]='art/keyart/'+a+b+c+d+'.png';
+          for(const e of ['P','T'])KEYART_SRC[a+b+c+d+e]='art/keyart/'+a+b+c+d+e+'.png';}}}}
 })();
 const KEYART={};                            // 形态码 → 去底紧裁后的高清立绘 canvas（平滑缩放，直接用 PNG）
 const KEYART_HEAD={};                        // 形态码 → 给 Q版当大头的「头」（当前未启用：操作角色用程序化形象）
