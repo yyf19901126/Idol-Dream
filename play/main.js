@@ -2443,6 +2443,10 @@ let devOpen=false;
 function toggleDev(){devOpen=!devOpen;$('dev').classList.toggle('show',devOpen);if(devOpen)buildDev();}
 function devSetMods(m){
   P.mods=m.slice();
+  // dev 切换形态：清掉旧专属技能状态(否则残留/空格无效)；满5字立即解锁该形态专属技能
+  P.activeSkill=null;P.passiveSkill=null;P._skT=0;P.skillCd=0;P._pendWeapon=0;
+  if(G.clones)G.clones=G.clones.filter(c=>!c.sister);   // 清掉旧的永久陪伴分身(青梅等)
+  if(P.mods.length===5)grantFormSkill();
   const mx=ST().maxhp;P.hp=Math.min(P.hp||mx,mx);if(P.hp<1)P.hp=mx;
   $('formLab').textContent=playerSprite(P.mods).name;
   buildDev();
