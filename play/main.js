@@ -46,6 +46,7 @@ addEventListener('resize',fitLayout);
 let ESPR,COIN,HOLO;
 /* 大招 cut-in 立绘（按需懒加载，仅当前形态会用到一张） */
 const ULT_IMG={};
+let _ultBurst=null;                                       // 大招集中线低分辨率离屏画布（放大成像素块）
 function getUltImg(code){
   if(ULT_IMG[code]!==undefined)return ULT_IMG[code];
   const im=new Image();im.src='art/ult/'+code+'.jpg';ULT_IMG[code]=im;return im;
@@ -1989,15 +1990,21 @@ function drawUltCut(c){
   ctx.save();
   // 暗化全场（聚焦）
   ctx.globalAlpha=0.74*a;ctx.fillStyle='#08040e';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
-  // 漫画集中线（放射 speed lines）
-  ctx.save();ctx.translate(cx,cy);const rot=T/2600,outer=Math.max(W,H);
-  for(let i=0;i<46;i++){const ang=i*(Math.PI*2/46)+rot,inner=185+(i%3)*30;
-    ctx.fillStyle=i%2?col:'#ffffff';ctx.globalAlpha=(i%2?0.17:0.10)*a;
-    ctx.beginPath();ctx.moveTo(Math.cos(ang-0.014)*inner,Math.sin(ang-0.014)*inner);
-    ctx.lineTo(Math.cos(ang-0.055)*outer,Math.sin(ang-0.055)*outer);
-    ctx.lineTo(Math.cos(ang+0.055)*outer,Math.sin(ang+0.055)*outer);
-    ctx.lineTo(Math.cos(ang+0.014)*inner,Math.sin(ang+0.014)*inner);ctx.closePath();ctx.fill();}
-  ctx.restore();
+  // 漫画集中线（放射 speed lines）——画在低分辨率离屏画布上，再 nearest 放大成粗像素块
+  const PX=9;                                                          // 每个像素块 ≈9px
+  const lw=Math.ceil(W/PX), lh=Math.ceil(H/PX);
+  if(!_ultBurst)_ultBurst=document.createElement('canvas');
+  if(_ultBurst.width!==lw||_ultBurst.height!==lh){_ultBurst.width=lw;_ultBurst.height=lh;}
+  const g=_ultBurst.getContext('2d');g.clearRect(0,0,lw,lh);
+  const lcx=lw/2,lcy=lh/2,lout=Math.max(lw,lh),rot=Math.floor(T/120)*0.06;   // 阶梯式旋转，更像素
+  for(let i=0;i<40;i++){const ang=i*(Math.PI*2/40)+rot,inner=(180+(i%3)*34)/PX;
+    g.fillStyle=i%2?col:'#ffffff';g.globalAlpha=(i%2?0.85:0.55);
+    g.beginPath();g.moveTo(lcx+Math.cos(ang-0.018)*inner,lcy+Math.sin(ang-0.018)*inner);
+    g.lineTo(lcx+Math.cos(ang-0.06)*lout,lcy+Math.sin(ang-0.06)*lout);
+    g.lineTo(lcx+Math.cos(ang+0.06)*lout,lcy+Math.sin(ang+0.06)*lout);
+    g.lineTo(lcx+Math.cos(ang+0.018)*inner,lcy+Math.sin(ang+0.018)*inner);g.closePath();g.fill();}
+  g.globalAlpha=1;
+  ctx.save();ctx.imageSmoothingEnabled=false;ctx.globalAlpha=0.5*a;ctx.drawImage(_ultBurst,0,0,lw*PX,lh*PX);ctx.restore();
   // 漫画框 + 立绘（轻微倾斜增加冲击）
   const img=c.img, ih=H*0.6, iw=(img&&img.width)?img.width*ih/img.height:ih*0.66;
   ctx.save();ctx.translate(cx,cy);ctx.rotate(-0.035);ctx.scale(sc,sc);ctx.globalAlpha=a;
