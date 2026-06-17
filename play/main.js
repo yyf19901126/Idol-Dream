@@ -2667,6 +2667,33 @@ function buildDev(){
 }
 
 /* ---------- 启动 ---------- */
+/* 启动预载：把首屏会用到的图喂进浏览器缓存，避免进场时地图/房间黑闪 */
+function preloadBoot(done){
+  const list=[
+    'art/title.jpg',
+    'art/maps/bg0.png','art/maps/bg1.png','art/maps/bg2.png','art/maps/bg3.png','art/maps/bg4.png','art/maps/bg5.png',
+    'art/rooms/uncle.png','art/keyart/uncle.png',
+    'art/enemies/luren.png','art/enemies/shuijun.png','art/enemies/penzi.png','art/enemies/baipiao.png',
+  ];
+  const TIPS=['正在连接直播间…','给阿源化妆中…','加载观众潮…','点亮舞台灯光…','调试改造贷款…'];
+  const fill=$('bootFill'),pct=$('bootPct'),tip=$('bootTip');
+  let n=0,total=list.length,fin=false;
+  const finish=()=>{if(fin)return;fin=true;done();};
+  const bump=()=>{n++;const p=Math.round(n/total*100);if(fill)fill.style.width=p+'%';if(pct)pct.textContent=p+'%';
+    if(tip)tip.textContent=TIPS[Math.min(TIPS.length-1,Math.floor(n/total*TIPS.length))];
+    if(n>=total)finish();};
+  list.forEach(src=>{const im=new Image();im.onload=bump;im.onerror=bump;im.src=src;});
+  setTimeout(finish,6000);                 // 兜底：网络再慢 6s 后也进标题
+}
+function showTitle(){
+  const b=$('bootScreen');if(b){b.classList.add('hide');setTimeout(()=>{b.style.display='none';},480);}
+  const art=$('titleArt');if(art){const pr=new Image();pr.onload=()=>{art.style.backgroundImage="url('art/title.jpg')";};pr.src='art/title.jpg';}
+  const t=$('titleScreen');if(t)t.style.display='flex';
+  G.scr='start';
+  $('btnStart').onclick=()=>{audioInit();if(t)t.style.display='none';beginRun();};
+  $('btnAbout').onclick=()=>{$('aboutModal').style.display='flex';};
+  $('btnAboutClose').onclick=()=>{$('aboutModal').style.display='none';};
+}
 function init(){
   ESPR=makeEnemySprites();COIN=makeCoin();HOLO=makeHolo();
   loadKeyart();
@@ -2674,8 +2701,9 @@ function init(){
   makeFloor();
   playerSprite([]);                       // 预热初始形态
   $('formLab').textContent='阿源（原点）';
+  G.scr='start';
   render();
-  startScreen();
   requestAnimationFrame(loop);
+  preloadBoot(showTitle);                  // 资源就绪 → 进主菜单标题页
 }
 init();

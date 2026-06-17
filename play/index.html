@@ -13,6 +13,48 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
   font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;overflow:hidden}
 #wrap{display:flex;height:100vh;width:100vw;gap:6px;padding:6px;align-items:stretch}
+
+/* ===== 启动加载页 ===== */
+#bootScreen{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 100% at 50% 38%,#1a1330 0%,#0b0812 70%);image-rendering:pixelated}
+#bootScreen.hide{opacity:0;pointer-events:none;transition:opacity .45s ease}
+.boot-inner{width:min(440px,76vw);text-align:center}
+.boot-logo{font-size:30px;font-weight:900;letter-spacing:2px;color:#fff;text-shadow:0 0 18px #ff7bc188,0 3px 0 #00000060}
+.boot-logo span{display:block;margin-top:4px;font-size:14px;font-weight:700;letter-spacing:3px;color:var(--pink)}
+.boot-bar{margin:26px 0 8px;height:18px;background:#100b1c;border:2px solid #3a2f55;border-radius:4px;
+  padding:2px;box-shadow:0 0 0 2px #0008,inset 0 0 8px #0009;overflow:hidden}
+.boot-bar>i{display:block;height:100%;width:0%;border-radius:2px;transition:width .18s linear;
+  background:repeating-linear-gradient(90deg,#ff7bc1 0 9px,#0000 9px 12px),linear-gradient(90deg,#ff7bc1,#9b6bff 60%,#4ad8ff);
+  box-shadow:0 0 10px #ff7bc1aa}
+.boot-row{display:flex;justify-content:space-between;font:12px Menlo,monospace;color:var(--dim);letter-spacing:1px}
+#bootPct{color:var(--cyan)}
+
+/* ===== 主菜单标题页 ===== */
+#titleScreen{position:fixed;inset:0;z-index:190;overflow:hidden;image-rendering:pixelated;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:7vh}
+#titleArt{position:absolute;inset:0;background:#0b0812 center/cover no-repeat;image-rendering:pixelated;
+  animation:titleZoom 22s ease-in-out infinite alternate}
+@keyframes titleZoom{0%{transform:scale(1.02)}100%{transform:scale(1.09)}}
+.title-scrim{position:absolute;inset:0;background:linear-gradient(180deg,#0b081266 0%,#0b081200 32%,#0b081255 70%,#0b0812ee 100%)}
+.title-logo{position:relative;margin-top:6vh;text-align:center;font-size:clamp(34px,5.4vw,68px);font-weight:900;letter-spacing:3px;
+  color:#fff;text-shadow:0 0 26px #ff7bc1aa,0 4px 0 #00000070,4px 0 0 #9b6bff55}
+.title-logo span{display:block;margin-top:6px;font-size:clamp(13px,1.5vw,18px);font-weight:700;letter-spacing:5px;color:var(--pink);text-shadow:0 0 12px #ff7bc1}
+.title-btns{position:relative;margin-top:auto;display:flex;flex-direction:column;gap:14px;align-items:center}
+.title-btn{font-family:inherit;font-size:18px;font-weight:800;letter-spacing:2px;color:#fff;cursor:pointer;
+  padding:12px 46px;border-radius:10px;background:#16111fcc;border:2px solid #3a2f55;backdrop-filter:blur(3px);
+  box-shadow:0 4px 0 #00000050;transition:transform .08s,box-shadow .08s,border-color .12s,background .12s}
+.title-btn:hover{transform:translateY(-2px);border-color:var(--cyan);background:#1f1830ee}
+.title-btn:active{transform:translateY(1px);box-shadow:0 2px 0 #00000050}
+.title-btn.primary{background:linear-gradient(180deg,#ff8fcf,#ff5aa8);border-color:#ffb8e0;color:#2a0a1c;
+  box-shadow:0 5px 0 #b03a72,0 0 22px #ff7bc166;padding:14px 56px;font-size:21px}
+.title-btn.primary:hover{background:linear-gradient(180deg,#ffa3d8,#ff6fb4);transform:translateY(-2px) scale(1.02)}
+.title-foot{position:relative;margin-top:18px;font:12px Menlo,monospace;color:#cdbfe0cc;letter-spacing:1px;text-shadow:0 1px 4px #000}
+#aboutModal{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(8,5,14,.78);backdrop-filter:blur(3px)}
+.about-box{width:min(560px,86vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px 30px;box-shadow:0 0 50px #000a;text-align:center}
+.about-box h3{margin:0 0 14px;font-size:20px;color:var(--pink);letter-spacing:1px}
+.about-box p{font-size:14px;line-height:1.8;color:var(--text);text-align:left;margin:0 0 14px}
+.about-ctrl{color:var(--dim)!important;font-size:12.5px!important}
+.about-box kbd{background:#0d0a16;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-family:Menlo,monospace;font-size:11px;color:var(--cyan)}
 /* 左列：上立绘 + 下能力值 */
 #leftcol{width:clamp(300px,23vw,390px);flex:none;display:flex;flex-direction:column;gap:6px;min-height:0}
 /* 中列：游戏区 */
@@ -387,6 +429,36 @@ kbd{background:#241c33;border:1px solid var(--line);border-radius:4px;padding:1p
   </aside>
 </div>
 <div id="shopOv" class="shopOv"></div>
+
+<!-- 启动加载页：资源就绪前盖住，避免地图/房间黑闪 -->
+<div id="bootScreen">
+  <div class="boot-inner">
+    <div class="boot-logo">《后巷偶像》<span>Back Alley Idol</span></div>
+    <div class="boot-bar"><i id="bootFill"></i></div>
+    <div class="boot-row"><span id="bootTip">正在连接直播间…</span><span id="bootPct">0%</span></div>
+  </div>
+</div>
+
+<!-- 主菜单标题页 -->
+<div id="titleScreen" style="display:none">
+  <div id="titleArt"></div>
+  <div class="title-scrim"></div>
+  <div class="title-logo">《后巷偶像》<span>Back Alley Idol</span></div>
+  <div class="title-btns">
+    <button class="title-btn primary" id="btnStart">▶ 开始游戏</button>
+    <button class="title-btn" id="btnAbout">关于</button>
+  </div>
+  <div class="title-foot">撑过 30 波观众浪潮 · 出道成神</div>
+  <div id="aboutModal" style="display:none">
+    <div class="about-box">
+      <h3>关于《后巷偶像》</h3>
+      <p>一款肉鸽生存 × 偶像养成网页游戏。400 斤的后巷肥宅·阿源签下改造贷款，参加直播平台的残酷新人企划——撑过 30 波观众浪潮，途中经历 <b>5 次身体改造</b>，最终成为 <b>32 种偶像形态</b>之一。击倒涌来的观众＝用魅力圈粉，心态归零就只能下播。</p>
+      <p class="about-ctrl"><kbd>WASD / 方向键</kbd> 移动 ｜ 武器自动攻击 ｜ <kbd>空格</kbd> 大招 ｜ <kbd>Esc</kbd> 暂停</p>
+      <button class="title-btn" id="btnAboutClose">返回</button>
+    </div>
+  </div>
+</div>
+
 <script src="chardesign/engine.js"></script>
 <script src="chardesign/hair.js"></script>
 <script src="chardesign/parts.js"></script>
