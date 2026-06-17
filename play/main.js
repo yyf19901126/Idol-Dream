@@ -208,19 +208,11 @@ function sfx(kind){
   else if(kind==='gift'){                             // 礼物：甜蜜小琶音
     _osc(659,.12,'triangle',.10,659); _osc(880,.12,'triangle',.075,880,N+.06); _osc(1319,.14,'sine',.05,1319,N+.12);
   }
-  else if(kind==='cheer'){                            // 全场观众欢呼：涌起的人群轰鸣 + 一片鼓掌 + 上扬"wooo" + 口哨
-    const sr=AC.sampleRate, dur=1.6, len=Math.floor(sr*dur), buf=AC.createBuffer(1,len,sr), d=buf.getChannelData(0);
-    const env=x=>x<0.12?x/0.12:(x<0.62?1:Math.max(0,1-(x-0.62)/0.38));        // 涌起0.12s→维持→渐落(不再是瞬间泄气)
-    for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*0.16*env(i/len);            // 底层人群轰鸣(持续)
-    for(let c=0;c<180;c++){const cx=Math.random();if(Math.random()>env(cx)*1.05)continue;   // ~180 个随机短促"啪"=鼓掌
-      const s0=(cx*len)|0,cl=(sr*(0.005+Math.random()*0.013))|0,amp=0.4+Math.random()*0.55;
-      for(let j=0;j<cl&&s0+j<len;j++){let v=d[s0+j]+(Math.random()*2-1)*amp*(1-j/cl);d[s0+j]=v>1?1:v<-1?-1:v;}}
-    const src=AC.createBufferSource();src.buffer=buf;
-    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=5000;
-    const g=AC.createGain();g.gain.value=0.8;src.connect(lp);lp.connect(g);g.connect(masterGain);src.start(N);
-    for(let i=0;i<16;i++){const f=300+Math.random()*560;_osc(f,.6+Math.random()*.35,'sawtooth',.02,f*(1.5+Math.random()*.45),N+Math.random()*.3);}  // 一片人声欢呼
-    _osc(392,.8,'sine',.05,784,N+.05);_osc(523,.85,'sine',.04,1046,N+.15);_osc(659,.8,'sine',.03,1318,N+.26);   // 主升"wooo"
-    _osc(2100,.2,'sine',.045,3000,N+.18);_osc(2500,.16,'sine',.03,3400,N+.7);                                   // 口哨
+  else if(kind==='cheer'){                            // 全场观众欢呼：人群轰鸣 + 鼓掌 + 一片上扬"wooo" + 零星口哨
+    _noise(.95,.14,1400); _noise(.75,.085,2600); _noise(.5,.05,5200);      // 人群轰鸣(低) + 掌声(中高) + 嘶声(高)
+    for(let i=0;i<12;i++){const f=360+Math.random()*760;_osc(f,.55,'triangle',.026,f*(1.4+Math.random()*0.3),N+i*0.035);}  // 一片各异的上扬欢呼声
+    _osc(523,.62,'sine',.055,1046,N+.04); _osc(659,.66,'sine',.045,1318,N+.14); _osc(784,.6,'sine',.035,1568,N+.26);        // 主升"wooo"
+    _osc(1900,.14,'sine',.04,2700,N+.18); _osc(2200,.12,'sine',.03,3100,N+.5);                                              // 口哨
   }
 }
 function updateSfxBtn(){const b=document.getElementById('sfxToggle');if(b){b.textContent=SFX_ON?'🔊':'🔇';b.classList.toggle('off',!SFX_ON);}}
