@@ -2667,41 +2667,45 @@ function buildDev(){
 }
 
 /* ---------- 启动 ---------- */
-/* 启动预载：把首屏会用到的图/动态图全部加载好（含标题视频），进度走满 100% 再进标题，杜绝黑闪 */
+/* 标题动态版：清晰原视频抽出的 6fps 帧序列（比整段压缩 mp4 清晰，复古手感） */
+const TITLE_FN=30;
+function titleFrameSrc(i){return 'art/title_frames/f'+String(i).padStart(2,'0')+'.jpg';}
+let _titleTimer=null;
+function startTitleAnim(){
+  const art=$('titleArt');if(!art)return;
+  let i=1;const show=()=>{art.style.backgroundImage="url('"+titleFrameSrc(i)+"')";i=i>=TITLE_FN?1:i+1;};
+  show();clearInterval(_titleTimer);_titleTimer=setInterval(show,1000/6);   // 6fps
+}
+function stopTitleAnim(){clearInterval(_titleTimer);_titleTimer=null;}
+/* 启动预载：首屏图 + 标题 6fps 帧全部加载好，进度严格单调走满 100% 再进标题，杜绝黑闪 */
 function preloadBoot(done){
-  const imgs=[
-    'art/title.jpg',
-    'art/maps/bg0.jpg','art/maps/bg1.jpg','art/maps/bg2.jpg','art/maps/bg3.jpg','art/maps/bg4.jpg','art/maps/bg5.jpg',
-    'art/rooms/uncle.jpg','art/keyart/uncle.png',
-    'art/enemies/luren.png','art/enemies/shuijun.png','art/enemies/penzi.png','art/enemies/baipiao.png',
-  ];
+  const imgs=['art/title.jpg','art/maps/bg0.jpg','art/rooms/uncle.jpg','art/keyart/uncle.png',
+    'art/enemies/luren.png','art/enemies/shuijun.png','art/enemies/penzi.png','art/enemies/baipiao.png'];
+  for(let i=1;i<=TITLE_FN;i++)imgs.push(titleFrameSrc(i));   // 标题动画帧
   const TIPS=['正在连接直播间…','给阿源化妆中…','加载观众潮…','点亮舞台灯光…','调试改造贷款…'];
   const fill=$('bootFill'),pct=$('bootPct'),tip=$('bootTip');
-  const total=imgs.length+1;               // +1 = 标题动态视频
-  let n=0,fin=false;
-  const setBar=p=>{p=Math.max(0,Math.min(100,p));if(fill)fill.style.width=p+'%';if(pct)pct.textContent=Math.round(p)+'%';
+  const total=imgs.length;
+  let n=0,shown=0,fin=false;
+  const setBar=p=>{p=Math.max(shown,Math.min(100,p));shown=p;                 // 单调不回退
+    if(fill)fill.style.width=p+'%';if(pct)pct.textContent=Math.round(p)+'%';
     if(tip)tip.textContent=TIPS[Math.min(TIPS.length-1,Math.floor(p/100*TIPS.length))];};
-  const finish=()=>{if(fin)return;fin=true;setBar(100);setTimeout(done,500);};   // 显示 100% 停留半秒再进
-  const bump=()=>{n++;setBar(Math.min(99,n/total*100));if(n>=total)finish();};
+  const finish=()=>{if(fin)return;fin=true;setBar(100);setTimeout(done,500);};  // 显示 100% 停留半秒再进
+  const bump=()=>{if(fin)return;n++;setBar(Math.min(99,n/total*100));if(n>=total)finish();};
   imgs.forEach(src=>{const im=new Image();im.onload=bump;im.onerror=bump;im.src=src;});
-  // 标题动态视频：进场前就加载好，让标题页直接淡入（不再静态→视频突跳/黑屏）
-  const v=$('titleVid');
-  if(v){v.muted=true;v.preload='auto';v.src='art/title.mp4';let vd=false;
-    const vb=()=>{if(vd)return;vd=true;bump();};
-    v.addEventListener('loadeddata',vb,{once:true});v.addEventListener('error',vb,{once:true});v.load();}
-  else bump();
-  setTimeout(()=>{if(!fin)finish();},9000); // 兜底：网络再慢 9s 也走完
+  setTimeout(()=>{if(!fin)finish();},9000);   // 兜底
+}
+function prefetchRest(){                       // 标题显示后台预取：其余地图（防改造进化时黑闪）
+  ['art/maps/bg1.jpg','art/maps/bg2.jpg','art/maps/bg3.jpg','art/maps/bg4.jpg','art/maps/bg5.jpg']
+    .forEach(s=>{const im=new Image();im.src=s;});
 }
 function showTitle(){
-  const t=$('titleScreen'),art=$('titleArt'),vid=$('titleVid'),b=$('bootScreen');
-  if(art)art.style.backgroundImage="url('art/title.jpg')";   // 已预载→同步上图，瞬间显示不黑
-  if(t)t.style.display='flex';                                // 先在 boot 之下铺好标题，再淡出 boot
-  if(vid){vid.muted=true;const go=()=>{vid.style.opacity='1';const p=vid.play();if(p&&p.catch)p.catch(()=>{});};
-    if(vid.readyState>=2)go();else{vid.addEventListener('canplay',go,{once:true});vid.addEventListener('loadeddata',go,{once:true});}
-    vid.addEventListener('error',()=>{vid.style.display='none';},{once:true});}
+  const t=$('titleScreen'),art=$('titleArt'),b=$('bootScreen');
+  if(art)art.style.backgroundImage="url('"+titleFrameSrc(1)+"')";   // 已预载→同步上首帧，瞬间显示不黑
+  if(t)t.style.display='flex';                                       // 先在 boot 之下铺好标题，再淡出 boot
+  startTitleAnim();                                                  // 6fps 帧循环（帧已缓存→流畅）
   if(b){b.classList.add('hide');setTimeout(()=>{b.style.display='none';},480);}
-  G.scr='start';
-  $('btnStart').onclick=()=>{audioInit();if(t)t.style.display='none';beginRun();};
+  G.scr='start';prefetchRest();
+  $('btnStart').onclick=()=>{audioInit();stopTitleAnim();if(t)t.style.display='none';beginRun();};
   $('btnAbout').onclick=()=>{$('aboutModal').style.display='flex';};
   $('btnAboutClose').onclick=()=>{$('aboutModal').style.display='none';};
 }
