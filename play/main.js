@@ -1997,8 +1997,10 @@ function drawUltCut(c){
   if(_ultBurst.width!==lw||_ultBurst.height!==lh){_ultBurst.width=lw;_ultBurst.height=lh;}
   const g=_ultBurst.getContext('2d');g.clearRect(0,0,lw,lh);
   const lcx=lw/2,lcy=lh/2,lout=Math.max(lw,lh),rot=Math.floor(T/120)*0.06;   // 阶梯式旋转，更像素
+  const tf=Math.floor(T/70);                                                 // 像素帧步（每~70ms跳一次，逐帧明灭）
   for(let i=0;i<40;i++){const ang=i*(Math.PI*2/40)+rot,inner=(180+(i%3)*34)/PX;
-    g.fillStyle=i%2?col:'#ffffff';g.globalAlpha=(i%2?0.85:0.55);
+    const fl=Math.abs((Math.sin((tf+i*7.13)*12.9898)*43758.5453)%1);        // 每像素帧×每射线 伪随机闪烁
+    g.fillStyle=i%2?col:'#ffffff';g.globalAlpha=(i%2?0.85:0.55)*(0.28+0.95*fl);
     g.beginPath();g.moveTo(lcx+Math.cos(ang-0.018)*inner,lcy+Math.sin(ang-0.018)*inner);
     g.lineTo(lcx+Math.cos(ang-0.06)*lout,lcy+Math.sin(ang-0.06)*lout);
     g.lineTo(lcx+Math.cos(ang+0.06)*lout,lcy+Math.sin(ang+0.06)*lout);
