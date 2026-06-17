@@ -12,6 +12,11 @@
 *{box-sizing:border-box;user-select:none}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
   font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;overflow:hidden}
+@font-face{font-family:'Zpix';src:url('art/fonts/zpix.woff2') format('woff2');font-display:swap}
+/* 主菜单/加载页全部文字用像素字体（Zpix 子集，含本页所需字形） */
+#bootScreen,#bootScreen *,#titleScreen,#titleScreen *{
+  font-family:'Zpix',"PingFang SC",sans-serif!important;font-weight:normal!important;font-synthesis:none;
+  -webkit-font-smoothing:none;letter-spacing:0}
 #wrap{display:flex;height:100vh;width:100vw;gap:6px;padding:6px;align-items:stretch}
 
 /* ===== 启动加载页 ===== */
@@ -450,11 +455,11 @@ kbd{background:#241c33;border:1px solid var(--line);border-radius:4px;padding:1p
     <button class="title-btn primary" id="btnStart">▶ 开始游戏</button>
     <button class="title-btn" id="btnAbout">关于</button>
   </div>
-  <div class="title-foot">撑过 30 波观众浪潮 · 出道成神</div>
+  <div class="title-foot">撑过 20 波观众浪潮 · 出道成神</div>
   <div id="aboutModal" style="display:none">
     <div class="about-box">
       <h3>关于《后巷偶像》</h3>
-      <p>一款肉鸽生存 × 偶像养成网页游戏。400 斤的后巷肥宅·阿源签下改造贷款，参加直播平台的残酷新人企划——撑过 30 波观众浪潮，途中经历 <b>5 次身体改造</b>，最终成为 <b>32 种偶像形态</b>之一。击倒涌来的观众＝用魅力圈粉，心态归零就只能下播。</p>
+      <p>一款肉鸽生存 × 偶像养成网页游戏。400 斤的后巷肥宅·阿源签下改造贷款，参加直播平台的残酷新人企划——撑过 20 波观众浪潮，途中经历 <b>5 次身体改造</b>，最终成为 <b>32 种偶像形态</b>之一。击倒涌来的观众＝用魅力圈粉，心态归零就只能下播。</p>
       <p class="about-ctrl"><kbd>WASD / 方向键</kbd> 移动 ｜ 武器自动攻击 ｜ <kbd>空格</kbd> 大招 ｜ <kbd>Esc</kbd> 暂停</p>
       <button class="title-btn" id="btnAboutClose">返回</button>
     </div>
