@@ -106,7 +106,7 @@ function chibiHead(mods){
   return CHIBI[key];
 }
 /* 新版 Q版操作角色：按形态码懒加载 GPT 生成的 chibi 透明图；缺图/加载中才回退程序化 */
-const CHIBIMG={},CHIBILOADING={}; let _hitCanvas=null;
+const CHIBIMG={},CHIBILOADING={}; let _hitCanvas=null,_lastChibi=null;
 function chibiSrc(key){return 'art/chibi/'+(key==='_'?'uncle':key)+'.png?v=px1';}  // ?v= 版本号：换图后改这里强制绕过浏览器缓存
 function getChibiImg(key){
   if(key in CHIBIMG)return CHIBIMG[key];
@@ -116,7 +116,8 @@ function getChibiImg(key){
 }
 function drawChibi(g,x,y,mods,o){
   const key=mods.join('')||'_';
-  const im=getChibiImg(key);
+  let im=getChibiImg(key);
+  if(im&&im.width)_lastChibi=im; else im=_lastChibi;      // 加载中/缺图→用最近一张可用立绘占位，绝不回退已弃用的程序化老形象
   if(im&&im.width){                                       // 用 GPT 的 Q版图 + 果冻 squash-stretch 走路
     const TH=64,sc=TH/im.height,tw=im.width*sc;            // 操作角色高度（略缩小，给环绕武器留空间）
     const moving=o.moving,ph=o.run||0;
@@ -150,6 +151,11 @@ function drawChibi(g,x,y,mods,o){
     g.restore();
     return;
   }
+  // 极早期首帧：连占位立绘都还没有 → 只画一个影子，依然不画已弃用的程序化老形象
+  {const al=o.alpha==null?1:o.alpha;g.save();g.translate(x,y+12);g.scale(1,.38);g.globalAlpha=al*.5;
+   g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.arc(0,0,12,0,7);g.fill();g.restore();}
+  return;
+  /* ↓↓↓ 旧程序化形象（已弃用）：drawChibi 不再走到这里；chibiHead 仍保留供其他处引用 ↓↓↓ */
   const ch=chibiHead(mods);
   const HW=ch.img?80:74,HH=Math.round(HW*ch.hh/ch.hw);   // 放大一倍（程序化回退保持一致）
   const body=ramp(ch.bodyC),leg=ramp(ch.legC),sk=ramp(ch.spec.skin||'#e0b184');

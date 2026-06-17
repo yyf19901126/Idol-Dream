@@ -2632,6 +2632,7 @@ function devSetMods(m){
   // dev 切换形态：清掉旧专属技能状态(否则残留/空格无效)；满5字立即解锁该形态专属技能
   P.activeSkill=null;P.passiveSkill=null;P._skT=0;P.skillCd=0;P._pendWeapon=0;
   if(G.clones)G.clones=G.clones.filter(c=>!c.sister);   // 清掉旧的永久陪伴分身(青梅等)
+  if(typeof getChibiImg==='function')getChibiImg(P.mods.join('')||'_');   // 提前预载新形态 chibi，缩短占位时间
   if(P.mods.length===5)grantFormSkill();
   const mx=ST().maxhp;P.hp=Math.min(P.hp||mx,mx);if(P.hp<1)P.hp=mx;
   $('formLab').textContent=playerSprite(P.mods).name;
@@ -2683,6 +2684,7 @@ function stopTitleAnim(){clearInterval(_titleTimer);_titleTimer=null;}
 /* 启动预载：首屏图 + 标题 6fps 帧全部加载好（帧 Image 引用留存供 canvas 复用），进度单调走满 100% 再进标题 */
 function preloadBoot(done){
   const staticImgs=['art/title.jpg','art/maps/bg0.jpg','art/rooms/uncle.jpg','art/keyart/uncle.png',
+    (typeof chibiSrc==='function'?chibiSrc('_'):'art/chibi/uncle.png?v=px1'),   // 原点操作角色立绘，进场即用
     'art/enemies/luren.png','art/enemies/shuijun.png','art/enemies/penzi.png','art/enemies/baipiao.png'];
   _titleImgs=[];for(let i=0;i<TITLE_FN;i++)_titleImgs.push(new Image());   // 保留引用→保持已解码，canvas 直接用
   const TIPS=['正在连接直播间…','给阿源化妆中…','加载观众潮…','点亮舞台灯光…','调试改造贷款…'];
