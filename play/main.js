@@ -1237,6 +1237,30 @@ const FX_STYLE={
   drone:'drone', camTurret:'turret', aiCohost:'ai', cyberPet:'pet',
 };
 /* ---------- 武器开火 ---------- */
+/* ===== 敌人空间网格（每帧重建）：把"逐子弹×全体敌人"的 O(B·E) 碰撞降到 ~O(B·近邻) ===== */
+let _eg=null,_egCol=0,_egRow=0; const _EGC=80;        // 格边 80px（>最大敌人直径，碰撞只涉及邻格）
+function buildEnemyGrid(){
+  _egCol=Math.max(1,Math.ceil((AW+160)/_EGC)); _egRow=Math.max(1,Math.ceil((AH+160)/_EGC));
+  const n=_egCol*_egRow;
+  if(!_eg||_eg.length!==n){_eg=new Array(n);for(let i=0;i<n;i++)_eg[i]=[];}
+  else for(let i=0;i<n;i++)_eg[i].length=0;
+  const es=G.enemies;
+  for(let i=0;i<es.length;i++){const e=es[i];if(e.dead)continue;
+    let cx=((e.x+80)/_EGC)|0,cy=((e.y+80)/_EGC)|0;
+    if(cx<0)cx=0;else if(cx>=_egCol)cx=_egCol-1; if(cy<0)cy=0;else if(cy>=_egRow)cy=_egRow-1;
+    _eg[cy*_egCol+cx].push(e);}
+}
+function eachEnemyNear(x,y,r,cb){                      // 遍历 (x,y) 半径 r 内可能命中的敌人（落在重叠格里）
+  if(!_eg){const es=G.enemies;for(let i=0;i<es.length;i++)cb(es[i]);return;}
+  let x0=((x-r+80)/_EGC)|0,x1=((x+r+80)/_EGC)|0,y0=((y-r+80)/_EGC)|0,y1=((y+r+80)/_EGC)|0;
+  if(x0<0)x0=0; if(y0<0)y0=0; if(x1>=_egCol)x1=_egCol-1; if(y1>=_egRow)y1=_egRow-1;
+  for(let cy=y0;cy<=y1;cy++){const base=cy*_egCol;for(let cx=x0;cx<=x1;cx++){const cell=_eg[base+cx];for(let i=0;i<cell.length;i++)cb(cell[i]);}}
+}
+function nearestNear(x,y,r,skip){                      // 网格版"半径内最近敌人"
+  let best=null,bd=r*r;
+  eachEnemyNear(x,y,r,e=>{if(e.dead||(skip&&skip.has(e)))return;const dx=e.x-x,dy=e.y-y,d=dx*dx+dy*dy;if(d<bd){bd=d;best=e;}});
+  return best;
+}
 function nearestEnemy(range){
   let best=null,bd=range*range;
   G.enemies.forEach(e=>{if(e.dead)return;const d=dist2(e,P);if(d<bd){bd=d;best=e;}});
@@ -1248,8 +1272,7 @@ function nearestN(range,k){                          // 最近 k 个敌人（多
 function chainFrom(src,dmg,jumps,status){            // 链式：跳到附近未命中目标，每跳 ×0.7（§4.5）
   let cur=src,hit=new Set([src]),d=dmg;
   for(let j=0;j<jumps;j++){
-    let best=null,bd=130*130;
-    G.enemies.forEach(e=>{if(e.dead||hit.has(e))return;const dd=dist2(e,cur);if(dd<bd){bd=dd;best=e;}});
+    const best=nearestNear(cur.x,cur.y,130,hit);
     if(!best)break;
     fx({type:'ring',x:best.x,y:best.y,r:18,col:'#8fd0ff',ttl:.18});
     hurtEnemy(best,d,false,status);hit.add(best);cur=best;d*=0.7;
@@ -1258,8 +1281,7 @@ function chainFrom(src,dmg,jumps,status){            // 链式：跳到附近未
 function shockArc(src,dmg,jumps){                     // 感电：受击瞬间电弧连锁邻近（noTrig 防递归再触发感电）
   let cur=src,hit=new Set([src]);
   for(let j=0;j<jumps;j++){
-    let best=null,bd=150*150;
-    G.enemies.forEach(e=>{if(e.dead||hit.has(e))return;const dd=dist2(e,cur);if(dd<bd){bd=dd;best=e;}});
+    const best=nearestNear(cur.x,cur.y,150,hit);
     if(!best)break;
     G.fx.push({type:'arc',x:cur.x,y:cur.y,x2:best.x,y2:best.y,ttl:.16,t:0,col:'#6ae8ff'});
     best.shock=0.55;hurtEnemy(best,dmg,false,{noTrig:1,noFx:1});hit.add(best);cur=best;dmg*=0.8;
@@ -1349,6 +1371,7 @@ function update(dt){
   const st=ST(); _st=st;
   G._hsCd=Math.max(0,(G._hsCd||0)-dt);
   G._impactN=0;                                     // 每帧命中特效预算计数（防大面积命中刷爆特效→卡顿）
+  buildEnemyGrid();                                 // 重建敌人空间网格（子弹碰撞/追踪/弹射/连锁靠它降复杂度）
   busTick(dt); procTick(dt); skTick(dt);            // 技能/buff/领域/友军/mosh 推进
   if(G.infHeat)P.heat=100;                           // dev·无限元气
   if(P.mods[2]==='B'){P._bioT=(P._bioT||0)+dt;if(P._bioT>=5){P._bioT=0;P._bio=Math.min(8,(P._bio||0)+1);}}  // ③ 生体无伤叠层
@@ -1453,8 +1476,7 @@ function update(dt){
   G.bullets.forEach(b=>{
     b.ttl-=dt;
     if(b.homing){
-      let best=null,bd=99999*99999;
-      G.enemies.forEach(e=>{if(e.dead)return;const d=dist2(e,b);if(d<bd){bd=d;best=e;}});
+      const best=nearestNear(b.x,b.y,560);          // 网格版追踪：锁 560px 内最近敌（后期满屏等价全局最近）
       if(best){
         const a=Math.atan2(best.y-b.y,best.x-b.x),cur=Math.atan2(b.vy,b.vx);
         let da=a-cur;while(da>Math.PI)da-=2*Math.PI;while(da<-Math.PI)da+=2*Math.PI;
@@ -1472,7 +1494,7 @@ function update(dt){
       }
     }
     b.x+=b.vx*dt;b.y+=b.vy*dt;
-    G.enemies.forEach(e=>{
+    eachEnemyNear(b.x,b.y,b.r+34,e=>{               // 只检近邻格内敌人（远处不可能命中）
       if(e.dead||b.ttl<=0||b.hit.has(e))return;
       if(dist2(e,b)<(e.r+b.r)**2){
         const bm=(b.back&&b.boom&&A('boomEcon'))?1.5:1;             // 回旋经济学：返程命中+50%且回打赏
@@ -1483,8 +1505,7 @@ function update(dt){
         if((b.pierce||0)>0){b.pierce--;b.pdec=(b.pdec||1)*0.85;}     // 穿透每个目标 ×0.85
         else if((b.bounce||0)>0){                                    // 弹射：转向下一个最近目标
           b.bounce--;b._jump=(b._jump||0)+1;
-          let best=null,bd=200*200;
-          G.enemies.forEach(o=>{if(o.dead||b.hit.has(o))return;const dd=dist2(o,b);if(dd<bd){bd=dd;best=o;}});
+          const best=nearestNear(b.x,b.y,200,b.hit);
           if(best){const a=Math.atan2(best.y-b.y,best.x-b.x),sp=Math.hypot(b.vx,b.vy);b.vx=Math.cos(a)*sp;b.vy=Math.sin(a)*sp;b.dmg*=A('ricochet')?1.1:(b._jump>=3?0.6:1.0);b.ttl=Math.max(b.ttl,.5);}  // 弹无虚发：弹射不衰反增10%
           else b.ttl=0;
         }
@@ -1717,7 +1738,7 @@ function heartPath(g,x,y,s,col){
 function drawBulletShape(ctx,b,now){
   const shape=FX_STYLE[b.kind]||'orb', col=b.col||'#fff', x=b.x, y=b.y, r=b.r||8;
   const ang=Math.atan2(b.vy||0,b.vx||0);
-  ctx.shadowColor=col;ctx.shadowBlur=16;
+  ctx.shadowColor=col;ctx.shadowBlur=G._heavy?0:16;     // 子弹海时关辉光（shadowBlur 是 canvas 最贵的开销）；弹幕不多时照常发光
   if(shape==='heart'){heartPath(ctx,x,y,5,col);}
   else if(shape==='spark'){ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.lineCap='round';
     for(let i=0;i<3;i++){const a=ang+i*2.094;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(a)*6,y+Math.sin(a)*6);ctx.stroke();}
@@ -1789,6 +1810,7 @@ function drawSummon(ctx,x,y,u){
 }
 function render(){
   ctx.save();
+  G._heavy=(G.bullets.length+G.ebullets.length+G.enemies.length)>200;   // 子弹/敌人海→降级辉光等高开销特效，保帧率
   const _fst=Math.min(5,P.mods.length);                // 阶段变化或地图背景刚加载完→重建地面
   if(!floorCv||_floorDirty||floorStage!==_fst){_floorDirty=false;makeFloor();}
   if(G.shake>0)ctx.translate(rnd(-G.shake,G.shake)*.5,rnd(-G.shake,G.shake)*.5);
@@ -1881,7 +1903,7 @@ function render(){
   /* 敌弹（恶评弹：脉动红/紫光球） */
   G.ebullets.forEach(b=>{
     const pul=1+0.12*Math.sin(NOW/90+b.x);
-    ctx.save();ctx.shadowColor=b.col||'#ff5a5a';ctx.shadowBlur=14;
+    ctx.save();ctx.shadowColor=b.col||'#ff5a5a';ctx.shadowBlur=G._heavy?0:14;
     ctx.fillStyle=b.col||'#ff6a6a';ctx.beginPath();ctx.arc(b.x,b.y,b.r*pul,0,7);ctx.fill();
     ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.globalAlpha=.55;ctx.beginPath();ctx.arc(b.x,b.y,b.r*.4,0,7);ctx.fill();
     ctx.restore();
@@ -1890,7 +1912,7 @@ function render(){
   /* 特效 */
   G.fx.forEach(f=>{
     const k=f.t/f.ttl;
-    if(f.type==='ring'){ctx.save();ctx.globalAlpha=1-k;ctx.shadowColor=f.col;ctx.shadowBlur=14;ctx.strokeStyle=f.col;ctx.lineWidth=4;ctx.fillStyle=f.col;
+    if(f.type==='ring'){ctx.save();ctx.globalAlpha=1-k;ctx.shadowColor=f.col;ctx.shadowBlur=G._heavy?0:14;ctx.strokeStyle=f.col;ctx.lineWidth=4;ctx.fillStyle=f.col;
       const R=f.r*k, s=f.style;
       ctx.beginPath();ctx.arc(f.x,f.y,R,0,7);ctx.stroke();
       if(s==='soundwave'){ctx.globalAlpha=(1-k)*.6;ctx.beginPath();ctx.arc(f.x,f.y,R*.6,0,7);ctx.stroke();ctx.beginPath();ctx.arc(f.x,f.y,R*1.18,0,7);ctx.stroke();}        // 低音：同心声波
