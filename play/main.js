@@ -460,23 +460,58 @@ function modModal(m){
 }
 /* ---------- 商店（Brotato 式：商品 / 持有道具 / 武器 / 属性 / 锁定 / 卖出） ---------- */
 let shopOffers=[],shopTab='primary';   // 4 槽，每槽 {w?/it?, locked?, sold?}；module 级持久 → 锁定跨波保留
+/* 再买一个该道具是否还有收益（纯布尔能力 flag 重复无意义→不进商店） */
+const MAG_FLAGS=new Set(['bounce','pierce','multishot','split','homing','chain','summonN','shockJump','knockback','projSize','chainWide','legion']);
+function itemStacks(it){
+  if(it.mods&&Object.keys(it.mods).length)return true;            // 数值属性：恒叠
+  if(it.hidden&&Object.keys(it.hidden).length)return true;
+  if(it.drawback)return true;                                     // 双刃：仍产生效果
+  if(it.trig)return true;                                         // 多一个触发实例
+  if(it.set){const need=(typeof SETS!=='undefined'&&SETS[it.set])?SETS[it.set].n:3;if((P.setN[it.set]||0)<need)return true;}  // 套装未集齐
+  if(it.flags){
+    if(it.flags.aura)return true;                                 // 多一个光环实例
+    for(const k in it.flags){
+      if(k==='aura'||k==='explode')continue;                     // explode 是覆盖赋值，重复无收益
+      if(MAG_FLAGS.has(k))return true;                            // 量级机制位：叠加更强
+      if(typeof it.flags[k]==='number'&&it.flags[k]!==1)return true;  // 小数数值(.15/.10)=量级
+    }
+  }
+  return false;                                                  // 纯布尔能力 flag → 已拥有则不再提供
+}
+/* 该道具当前是否值得进商店（首件总有用；重复仅当还能叠加） */
+function offerableItem(it){
+  if(it.req&&!P.mods.includes(it.req))return false;
+  if(P.itemIds.includes(it.id)&&!itemStacks(it))return false;
+  return true;
+}
+/* 该武器当前是否买得动（已满级 / 槽满且未拥有 → 不进商店） */
+function offerableWeapon(id){
+  const own=P.weapons.find(w=>w.id===id);
+  if(own&&own.lvl>=WLV_MAX)return false;                          // 已满级，买了无提升
+  if(!own&&P.weapons.length>=WEAPON_MAX)return false;             // 槽满又没有它，买不了
+  return true;
+}
 function genOffer(){
   for(let n=0;n<50;n++){
     if(Math.random()<.55){
       const sysSign='sign'+(P.mods[0]||'')+(P.mods[1]||'');   // 当前 ①② 大系对应招牌武器（过20关后入池）
       const ids=Object.keys(WEAPONS).filter(id=>id!=='mic'&&(!WEAPONS[id].meta||(G.wave>20&&id===sysSign)));
       const id=pick(ids);
-      const own=P.weapons.find(w=>w.id===id);
-      if(own&&own.lvl>=WLV_MAX)continue;
+      if(!offerableWeapon(id))continue;
       if(shopOffers.find(o=>o&&o.w===id))continue;
       return {w:id};
     }else{
       const it=pick(ITEMS);
-      if(it.req&&!P.mods.includes(it.req))continue;
+      if(!offerableItem(it))continue;
       if(shopOffers.find(o=>o&&o.it&&o.it.id===it.id))continue;
       return {it};
     }
   }
+  // 兜底：从「当前还买得动」的池里挑，避免给出无用槽
+  const wPool=Object.keys(WEAPONS).filter(id=>id!=='mic'&&!WEAPONS[id].meta&&offerableWeapon(id)&&!shopOffers.find(o=>o&&o.w===id));
+  const iPool=ITEMS.filter(it=>offerableItem(it)&&!shopOffers.find(o=>o&&o.it&&o.it.id===it.id));
+  if(iPool.length)return {it:pick(iPool)};
+  if(wPool.length)return {w:pick(wPool)};
   return {it:pick(ITEMS)};
 }
 function rollOffers(){                  // 仅刷新「未锁定 / 已售出」槽；锁定未售出槽保留（跨刷新+跨波不变）
@@ -776,13 +811,13 @@ function victory(){
 }
 
 /* ---------- 敌人（§5.1 数量优先 / §5.2 无尽指数）---------- */
-function baseScale(w){return 1+0.12*w+0.004*w*w;}                       // 出道段单体血量(很缓)
+function baseScale(w){return 1+0.15*w+0.005*w*w;}                       // 出道段单体血量(§07 v0.3.8 加强 +20%)
 function enemyHP(d,w,mini){
-  if(d.boss)return Math.round(mini ? 500*(1+0.14*w) : d.hp*(1+0.12*Math.max(0,w-20)));  // §6.3 完整Boss / mini-boss
-  if(d.elite)return d.hp*(1+0.14*w);                                    // 精英走线性，约同期小怪5-6倍
-  return w<=20 ? d.hp*baseScale(w) : d.hp*baseScale(20)*Math.pow(1.09,w-20);  // 波20后切指数(剪刀差)
+  if(d.boss)return Math.round(mini ? 600*(1+0.16*w) : d.hp*(1+0.12*Math.max(0,w-20)));  // §6.3 完整Boss / mini-boss(v0.3.8 base 600·系数0.16)
+  if(d.elite)return d.hp*(1+0.16*w);                                    // 精英走线性(v0.3.8 0.14→0.16)，约同期小怪5-6倍
+  return w<=20 ? d.hp*baseScale(w) : d.hp*baseScale(20)*Math.pow(1.085,w-20);  // 波20后切指数(剪刀差·无尽复利 v0.3.8 1.085)
 }
-function enemyDMG(d,w){return d.dmg*(1+0.07*w);}
+function enemyDMG(d,w){return d.dmg*(1+0.08*w);}                        // 接触伤害(v0.3.8 0.07→0.08)
 /* §1.1 移速上限档（v0.3.6）：肉墙×1.65 / 远程×1.50 / 高速冲锋×1.30；Boss 等未列默认肉墙 1.65 */
 const SPD_CAP={luren:1.65,baipiao:1.65,heifen:1.65,penzi:1.50,leping:1.50,shuijun:1.30,duijia:1.30};
 function eSpdMul(type,w){return Math.min(1+0.022*w, SPD_CAP[type]||1.65);}   // eSpd=baseSpd×min(1+0.022w, cap)
@@ -1565,8 +1600,8 @@ function update(dt){
       return false;
     });
     const w=G.wave, bossW=G.bossW;
-    const rate=w<=20?(0.7+0.32*w):(0.7+0.32*20+0.34*(w-20));   // §07 v0.3.3 入场密度（怪量约翻倍）
-    const cap=Math.round(w<=20?(18+4.0*w):(98+6*(w-20)));      // 同屏上限(无尽无硬顶)
+    const rate=w<=20?(0.8+0.38*w):((0.8+0.38*20)*Math.pow(1.02,w-20));   // §07 v0.3.8 入场密度（加强+复利）
+    const cap=Math.round(w<=20?(20+5.0*w):(120+6*(w-20)));      // 同屏上限(v0.3.8 w20~120·无尽无硬顶)
     const prog=G.waveDur>0?G.waveT/G.waveDur:0;                // 三段式节奏：前40%缓坡/中40%峰值×1.7/后20%收尾
     const peak=bossW?1:(prog<0.4?1:(prog<0.8?1.7:0.6));
     if(!bossW||G.bossRef){
