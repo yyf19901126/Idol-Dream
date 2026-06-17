@@ -108,7 +108,7 @@ function ST(){
   return{
     maxhp:Math.round(Math.max(1,maxhp)), regen, lifesteal,
     dmg, dmgMelee, dmgRanged, dmgElem, engi,
-    aspd, crit:Math.min(1,crit), range, armor, dodge:Math.min(.6,dodge),
+    aspd, crit:Math.min(1,crit), range:Math.min(1.5,range), armor, dodge:Math.min(.6,dodge),   // 存在感封顶+150%（防中后期范围覆盖全场）
     speed, luck, harvest, xp, gold,
     critMult:Math.min(3.0,1.8+A('critMult')+nCrit), pickup:200+A('pickup'),
     bounce:A('bounce'),pierce:A('pierce')+(m[1]==='S'?1:0)+(_b.pierce||0),multishot:A('multishot')+(_b.multishot||0),split:A('split'),
@@ -885,7 +885,7 @@ function hurtEnemy(e,dmg,isCrit,opt){
   if(opt.chill){e.slow=Math.max(e.slow,1.6);}
   if(opt.poison){e.poison=3;e.poisonDps=(2+G.wave*0.3)*(1+st.dmgElem);e.poisonStk=Math.min(10,(e.poisonStk||0)+1);}
   if(opt.burn){e.burn=2.5;e.burnDps=(4+G.wave*0.4)*(1+st.dmgElem);}        // 灼烧 DoT（比毒猛、时间短）
-  if(opt.shock&&(e._shockCd||0)<=0){e._shockCd=0.3;e.shock=0.55;shockArc(e,dmg*0.5*(1+st.dmgElem),(opt.shockJump||2)+(st.chain||0));}  // 感电连锁
+  if(opt.shock&&(e._shockCd||0)<=0){e._shockCd=0.3;e.shock=0.55;shockArc(e,dmg*0.5*(1+st.dmgElem),Math.min(4,(opt.shockJump||2)+(st.chain||0)));}  // 感电连锁（连接数封顶4，防过强）
   if(opt.vuln){e.vuln=2.5;e.vulnP=0.2;}
   if(A('resonator')&&(opt.burn||opt.shock||opt.poison||opt.chill||opt.vuln)&&Math.random()<.25){  // 状态共鸣器：25%补一种随机状态(不吃dmgElem)
     const x=pick(['burn','shock','poison','chill','vuln']);
@@ -1310,6 +1310,7 @@ function fireWeapon(w,st){
   const d=WEAPONS[w.id], mech=wMech(w.id,w.lvl);
   const ov=P._overload?1:0; if(ov)P._overload=0;       // ③ 义体过载：这一发投射物×3/范围×3/连锁3
   let range=d.range*(1+st.range)*(ov?3:1);
+  if(d.type==='melee')range=d.range*(1+st.range*0.5)*(ov?3:1);   // 近战范围随存在感增长减半，避免覆盖全场
   let baseDmg=wDmg(w.id,w.lvl)*wAddBracket(d,st);
   if(P.nextHitBonus){baseDmg*=(1+P.nextHitBonus);P.nextHitBonus=0;}   // 礼物转化：下次攻击加伤
   const F={multishot:(st.multishot||0)+(mech.multishot||0)+(ov?2:0), pierce:(st.pierce||0)+(mech.pierce||0),
@@ -1367,10 +1368,13 @@ function fireWeapon(w,st){
     fx({type:'hit',x:sx+Math.cos(aim)*14,y:sy+Math.sin(aim)*14,a:aim,r:12,ttl:.09,col:d.col});  // 枪口闪光
     P.face=Math.cos(aim)<0?-1:1;return true;
   }
-  if(d.type==='zone'){
-    const tgt=t||{x:P.x+rnd(-120,120),y:P.y+rnd(-120,120)};
-    const a=Math.atan2(tgt.y-P.y,tgt.x-P.x),dd=Math.min(Math.sqrt(dist2(tgt,P)),range);
-    G.zones.push({x:P.x+Math.cos(a)*dd,y:P.y+Math.sin(a)*dd,r:(55+w.lvl*6)*st.projSize,dmg:baseDmg,tick:0,ttl:4*(1+(mech.zoneDur||0)),status,pull:mech.zonePull,style:FX_STYLE[w.id]||'miasma',col:d.col});
+  if(d.type==='zone'){                                            // 喷雾类：投掷一个慢性 AOE 圈到投掷射程内某敌脚下（非自己脚下）
+    const throwR=d.range*(1+st.range);                            // 投掷射程随存在感
+    let zx,zy; const cands=[]; eachEnemyNear(P.x,P.y,throwR,e=>{if(!e.dead&&!e.ally&&dist2(e,P)<=throwR*throwR)cands.push(e);});
+    if(cands.length){const tg=cands[(Math.random()*cands.length)|0];zx=tg.x;zy=tg.y;}   // 落在射程内随机一名敌人脚下
+    else{const a=(P._vx||P._vy)?Math.atan2(P._vy,P._vx):(P.face>0?0:Math.PI),dd=Math.min(throwR,200);zx=clamp(P.x+Math.cos(a)*dd,WALL,AW-WALL);zy=clamp(P.y+Math.sin(a)*dd,WALL,AH-WALL);}  // 无敌人→朝前方丢出
+    const zr=(50+w.lvl*5)*(1+st.range*0.7)*(0.7+(st.projSize-1)*0.5);   // 圈面积随存在感扩大(+弹体大小微调)
+    G.zones.push({x:zx,y:zy,r:zr,dmg:baseDmg,tick:0,ttl:4*(1+(mech.zoneDur||0)),status,pull:mech.zonePull,style:FX_STYLE[w.id]||'miasma',col:d.col});
     return true;
   }
   if(d.type==='summon'){

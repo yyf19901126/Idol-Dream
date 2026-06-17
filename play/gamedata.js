@@ -181,7 +181,6 @@ const ITEMS=[
   {id:'coldSnap',  cls:'B',rarity:2,name:'趁你冷场',  desc:'对冰冷/冰封中的敌人伤害+30%',price:44, flags:{coldSnap:1}, tags:['chill']},
   {id:'cringeChain',cls:'C',rarity:2,name:'社死连锁', desc:'感电敌死亡→向最近2敌传染感电；感电跳数+1',price:48, flags:{shockJump:1}, trig:{on:'onKill',fn:'shockSpread',args:{}}, tags:['shock']},
   {id:'dramaLord', cls:'B',rarity:2,name:'节奏带师',  desc:'中毒层数越高，该敌受暴击伤害越高(每层+4%,上限+40%)',price:46, flags:{dramaLord:1}, tags:['poison']},
-  {id:'meltdown',  cls:'C',rarity:4,name:'综合社死现场',desc:'敌人同时≥3种状态→大型社死爆炸+各状态延长(ICD2s)',price:66, trig:{on:'onHit',fn:'meltdown',icd:2.0,args:{r:90}}, tags:['burn','shock','poison']},
   {id:'resonator', cls:'B',rarity:2,name:'状态共鸣器',desc:'造成任一状态时25%额外附加另一随机状态(铺状态,不吃共鸣)',price:50, flags:{resonator:1}},
   /* 6.2 机制放大簇 */
   {id:'ricochet',  cls:'B',rarity:2,name:'弹无虚发',  desc:'每弹射1次，该子弹下一段伤害+10%(抵消递减)',price:48, flags:{ricochet:1}, tags:['bounce']},
