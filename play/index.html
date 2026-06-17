@@ -35,6 +35,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
 #titleArt{position:absolute;inset:0;background:#0b0812 center/cover no-repeat;image-rendering:pixelated;
   animation:titleZoom 22s ease-in-out infinite alternate}
 @keyframes titleZoom{0%{transform:scale(1.02)}100%{transform:scale(1.09)}}
+#titleCanvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
 .title-scrim{position:absolute;inset:0;background:linear-gradient(180deg,#0b081266 0%,#0b081200 32%,#0b081255 70%,#0b0812ee 100%)}
 .title-logo{position:relative;margin-top:6vh;text-align:center;font-size:clamp(34px,5.4vw,68px);font-weight:900;letter-spacing:3px;
   color:#fff;text-shadow:0 0 26px #ff7bc1aa,0 4px 0 #00000070,4px 0 0 #9b6bff55}
@@ -442,6 +443,7 @@ kbd{background:#241c33;border:1px solid var(--line);border-radius:4px;padding:1p
 <!-- 主菜单标题页 -->
 <div id="titleScreen" style="display:none">
   <div id="titleArt"></div>
+  <canvas id="titleCanvas"></canvas>
   <div class="title-scrim"></div>
   <div class="title-logo">《后巷偶像》<span>Back Alley Idol</span></div>
   <div class="title-btns">

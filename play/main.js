@@ -2667,31 +2667,35 @@ function buildDev(){
 }
 
 /* ---------- 启动 ---------- */
-/* 标题动态版：清晰原视频抽出的 6fps 帧序列（比整段压缩 mp4 清晰，复古手感） */
+/* 标题动态版：清晰原视频抽出的 6fps 帧序列，画到 canvas 上循环（drawImage 已解码帧→零闪烁） */
 const TITLE_FN=30;
 function titleFrameSrc(i){return 'art/title_frames/f'+String(i).padStart(2,'0')+'.jpg';}
-let _titleTimer=null;
+let _titleImgs=[],_titleTimer=null;
 function startTitleAnim(){
-  const art=$('titleArt');if(!art)return;
-  let i=1;const show=()=>{art.style.backgroundImage="url('"+titleFrameSrc(i)+"')";i=i>=TITLE_FN?1:i+1;};
-  show();clearInterval(_titleTimer);_titleTimer=setInterval(show,1000/6);   // 6fps
+  const cv=$('titleCanvas');if(!cv||!_titleImgs.length)return;
+  const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+  const f0=_titleImgs[0];if(f0&&f0.naturalWidth){cv.width=f0.naturalWidth;cv.height=f0.naturalHeight;}
+  let i=0;
+  const draw=()=>{const im=_titleImgs[i];if(im&&im.complete&&im.naturalWidth)ctx.drawImage(im,0,0,cv.width,cv.height);i=(i+1)%_titleImgs.length;};
+  draw();clearInterval(_titleTimer);_titleTimer=setInterval(draw,1000/6);   // 6fps
 }
 function stopTitleAnim(){clearInterval(_titleTimer);_titleTimer=null;}
-/* 启动预载：首屏图 + 标题 6fps 帧全部加载好，进度严格单调走满 100% 再进标题，杜绝黑闪 */
+/* 启动预载：首屏图 + 标题 6fps 帧全部加载好（帧 Image 引用留存供 canvas 复用），进度单调走满 100% 再进标题 */
 function preloadBoot(done){
-  const imgs=['art/title.jpg','art/maps/bg0.jpg','art/rooms/uncle.jpg','art/keyart/uncle.png',
+  const staticImgs=['art/title.jpg','art/maps/bg0.jpg','art/rooms/uncle.jpg','art/keyart/uncle.png',
     'art/enemies/luren.png','art/enemies/shuijun.png','art/enemies/penzi.png','art/enemies/baipiao.png'];
-  for(let i=1;i<=TITLE_FN;i++)imgs.push(titleFrameSrc(i));   // 标题动画帧
+  _titleImgs=[];for(let i=0;i<TITLE_FN;i++)_titleImgs.push(new Image());   // 保留引用→保持已解码，canvas 直接用
   const TIPS=['正在连接直播间…','给阿源化妆中…','加载观众潮…','点亮舞台灯光…','调试改造贷款…'];
   const fill=$('bootFill'),pct=$('bootPct'),tip=$('bootTip');
-  const total=imgs.length;
+  const total=staticImgs.length+_titleImgs.length;
   let n=0,shown=0,fin=false;
   const setBar=p=>{p=Math.max(shown,Math.min(100,p));shown=p;                 // 单调不回退
     if(fill)fill.style.width=p+'%';if(pct)pct.textContent=Math.round(p)+'%';
     if(tip)tip.textContent=TIPS[Math.min(TIPS.length-1,Math.floor(p/100*TIPS.length))];};
   const finish=()=>{if(fin)return;fin=true;setBar(100);setTimeout(done,500);};  // 显示 100% 停留半秒再进
   const bump=()=>{if(fin)return;n++;setBar(Math.min(99,n/total*100));if(n>=total)finish();};
-  imgs.forEach(src=>{const im=new Image();im.onload=bump;im.onerror=bump;im.src=src;});
+  staticImgs.forEach(src=>{const im=new Image();im.onload=bump;im.onerror=bump;im.src=src;});
+  _titleImgs.forEach((im,k)=>{im.onload=bump;im.onerror=bump;im.src=titleFrameSrc(k+1);});
   setTimeout(()=>{if(!fin)finish();},9000);   // 兜底
 }
 function prefetchRest(){                       // 标题显示后台预取：其余地图（防改造进化时黑闪）
