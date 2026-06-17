@@ -2688,6 +2688,11 @@ function preloadBoot(done){
 function showTitle(){
   const b=$('bootScreen');if(b){b.classList.add('hide');setTimeout(()=>{b.style.display='none';},480);}
   const art=$('titleArt');if(art){const pr=new Image();pr.onload=()=>{art.style.backgroundImage="url('art/title.jpg')";};pr.src='art/title.jpg';}
+  const vid=$('titleVid');if(vid&&!vid.dataset.on){vid.dataset.on='1';vid.muted=true;vid.src='art/title.mp4';  // 动态版：就绪后淡入覆盖静态图；缺失则回退静态图
+    const go=()=>{vid.style.opacity='1';const p=vid.play();if(p&&p.catch)p.catch(()=>{});};
+    vid.addEventListener('canplay',go);vid.addEventListener('loadeddata',go);
+    vid.addEventListener('error',()=>{vid.style.display='none';},{once:true});
+    if(vid.readyState>=2)go();}
   const t=$('titleScreen');if(t)t.style.display='flex';
   G.scr='start';
   $('btnStart').onclick=()=>{audioInit();if(t)t.style.display='none';beginRun();};
