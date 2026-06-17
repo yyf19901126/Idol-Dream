@@ -60,7 +60,7 @@ const G={
   scr:'start',          // start play modal over win
   wave:0,waveT:0,waveDur:0,spawnAcc:0,elSched:[],
   enemies:[],bullets:[],ebullets:[],drops:[],zones:[],clones:[],fx:[],floats:[],allies:[],fields:[],
-  gold:0,kills:0,giftN:0,totalGold:0,
+  gold:0,kills:0,giftN:0,totalGold:0,corrupt:0,waveGold:0,waveXp:0,
   xp:0,level:1,xpNext:10,queuedLv:0,
   noHit:true,shake:0,tIncome:0,bossRef:null,
   posCd:0,negT:2.5,god:false,
@@ -105,12 +105,17 @@ function ST(){
   if(_b.armor)armor+=_b.armor; if(_b.range)range+=_b.range;
   if(A('noLifesteal'))lifesteal=0;                  // 共生菌株代价
   if(A('hpScale'))maxhp*=A('hpScale');
+  let critM=1.8+A('critMult')+nCrit;                                 // §1.2 暴击软上限60%：超出部分 1%暴击率→+2%暴伤
+  if(crit>0.6){critM+=(crit-0.6)*2;crit=0.6;}
+  if(dodge>0.3)dodge=0.3+(dodge-0.3)*0.5;                            // §7 闪避>30%后每点只给0.5%
+  dodge=Math.min(0.5,dodge);                                         // §7 闪避硬顶50%
+  lifesteal=Math.min(0.15,lifesteal);                               // §7 吸血硬顶+15%
   return{
     maxhp:Math.round(Math.max(1,maxhp)), regen, lifesteal,
     dmg, dmgMelee, dmgRanged, dmgElem, engi,
-    aspd, crit:Math.min(1,crit), range:Math.min(1.5,range), armor, dodge:Math.min(.6,dodge),   // 存在感封顶+150%（防中后期范围覆盖全场）
+    aspd, crit, range:Math.min(1.5,range), armor, dodge,            // crit/dodge 已在上方按软上限处理
     speed, luck, harvest, xp, gold,
-    critMult:Math.min(3.0,1.8+A('critMult')+nCrit), pickup:200+A('pickup'),
+    critMult:Math.min(3.0,critM), pickup:200+A('pickup'),
     bounce:A('bounce'),pierce:A('pierce')+(m[1]==='S'?1:0)+(_b.pierce||0),multishot:A('multishot')+(_b.multishot||0),split:A('split'),
     homing:A('homing')+(_b.homing||0),orbit:A('orbit'),chain:A('chain'),knockback:A('knockback'),
     projSpd:1+A('projSpd'),projSize:1+A('projSize'),procLuck:A('procLuck'),
@@ -128,7 +133,7 @@ function wAddBracket(d,st){
     else if(d.cat==='tech'||d.cat==='zone')add+=st.dmgElem*0.5+st.engi*0.5; else add+=st.engi;
   }
   if(d.syn&&P.mods.includes(d.syn))add+=0.35;        // 协同→加法区
-  return 1+Math.min(add,4.0);
+  return 1+Math.min(add,3.0);                         // §3.3 加法区硬封顶 +400%→+300%
 }
 
 /* ---------- 输入 ---------- */
@@ -353,7 +358,7 @@ function startWave(w){
   const bossW=(w===20||(w>20&&w%5===0));      // 波20 + 无尽里程碑(25/30/35…)=完整Boss波
   G.wave=w;G.waveT=0;G.waveDur=bossW?999:Math.min(Math.round(23+1.7*w),60);   // §07 v0.3.3 波时长拉长(w19=55s)，无尽封顶60s
   G.bossW=bossW;
-  G.spawnAcc=0;G.noHit=true;G.elSched=[];
+  G.spawnAcc=0;G.noHit=true;G.elSched=[];G.waveGold=0;G.waveXp=0;   // §2.1/§2.3 每波收入/经验软上限累计器
   P._sisUsed=0;P._gloomUsed=0;                       // 技能·每波首次类重置
   P._cashBuff=A('cashReaction')?Math.floor((P._shopSpend||0)/100)*0.08:0;P._shopSpend=0;  // 钞能力反应：上一轮商店消费→本波全伤
   if(w===1)G.miniBossSeen=false;                       // 本局 mini-boss 保底标记
@@ -396,10 +401,10 @@ function endWave(){
   P._skT=0;P._convWin=0;P._moshT=0;P._hype=0;                          // 波末清掉技能临时态（永久陪伴分身在 grant，已清，需重挂）
   if(P.passiveSkill&&P.passiveSkill.grant)P.passiveSkill.grant();      // 重挂永久陪伴（如青梅分身）
   if(P.mods[2]==='B'&&G.noHit){G.gold+=18;G.totalGold+=18;toast('无伤波次！观众追加打赏 +18');}
-  const salary=8+G.wave*3+Math.floor(ST().harvest);   // 时薪 + 恰饭
+  const salary=6+Math.round(G.wave*1.5)+Math.floor(ST().harvest);   // §2.1 工资 6+1.5w (flat·小额基底)
   G.gold+=salary;G.totalGold+=salary;
   danmaku('平台结算：本波直播工资 ♥'+salary,'sys');
-  P.hp=Math.min(ST().maxhp,P.hp+15);
+  P.hp=ST().maxhp;                                 // §7 波末心态回满：心态成为"波内资源"(死亡压力来自波内被围,而非跨波耗血)
   nextModal();                                     // 无尽：永不停，永远进商店/下一波
 }
 function nextModal(){
@@ -507,13 +512,13 @@ function genOffer(){
       const it=pick(ITEMS);
       if(!offerableItem(it))continue;
       if(shopOffers.find(o=>o&&o.it&&o.it.id===it.id))continue;
-      return {it};
+      return {it,corrupt:Math.random()<0.20};          // §6 恶堕：20%概率以恶堕版出现
     }
   }
   // 兜底：从「当前还买得动」的池里挑，避免给出无用槽
   const wPool=Object.keys(WEAPONS).filter(id=>id!=='mic'&&!WEAPONS[id].meta&&offerableWeapon(id)&&!shopOffers.find(o=>o&&o.w===id));
   const iPool=ITEMS.filter(it=>offerableItem(it)&&!shopOffers.find(o=>o&&o.it&&o.it.id===it.id));
-  if(iPool.length)return {it:pick(iPool)};
+  if(iPool.length)return {it:pick(iPool),corrupt:Math.random()<0.20};
   if(wPool.length)return {w:pick(wPool)};
   return {it:pick(ITEMS)};
 }
@@ -532,8 +537,10 @@ function price(o){
   if(o.w){
     const own=P.weapons.find(w=>w.id===o.w);
     p=WEAPONS[o.w].price*(1+G.wave*.06)*(own?1+own.lvl*.45:1);
-  }else p=o.it.price*(1+G.wave*.05)*(o.it.rarity?1+(o.it.rarity-1)*.15:1);
-  return Math.round(p*disc);
+  }else{const owned=P.itemIds.filter(id=>id===o.it.id).length;   // §2.2 同名道具第n件涨价 ×1.15^(n-1)，根治便宜属性件无脑堆叠
+    p=o.it.price*(1+G.wave*.04)*(o.it.rarity?1+(o.it.rarity-1)*.18:1)*Math.pow(1.15,owned);}
+  let mult=1; if(o.corrupt)mult=1.5;                             // §6 恶堕版售价×1.5
+  return Math.round(p*disc*mult);
 }
 function sellPrice(w){return Math.max(2,Math.round(WEAPONS[w.id].price*0.45*(1+(w.lvl-1)*0.6)*(1+G.wave*0.04)));}
 /* 把一个 offer 拆成展示部件（图标/名称/颜色/标签/详情/价格/槽满） */
@@ -550,8 +557,8 @@ function offerInfo(o){
         <br><span class="k">DPS@白</span> ${inf.dps||'—'} ｜ <span class="k">吃</span> ${scalesTxt(d)}
         ${mline?'<br><span class="mech">⬆ '+TIER_NAME[nl-1]+'：'+mline+'</span>':''}${d.syn?'<br><span class="syn">协同·改造'+d.syn+'</span>':''}`};
   }
-  const it=o.it,rc=RARITY_COL[it.rarity]||'#9aa0b0';
-  return {p,full:false,icon:'art/icons/items/'+it.id+'.png',col:rc,name:it.name,
+  const it=o.it,rc=o.corrupt?'#ff4a6e':(RARITY_COL[it.rarity]||'#9aa0b0');
+  return {p,full:false,corrupt:o.corrupt,icon:'art/icons/items/'+it.id+'.png',col:rc,name:(o.corrupt?'恶堕·':'')+it.name,
     tag:`<span style="color:${rc}">${CLS_NAME[it.cls]||''} · ${RARITY_NAME[it.rarity]||'道具'}</span>`,
     detail:`${it.desc}${it.set?'<br><span class="syn">套装·'+it.set+'</span>':''}${it.req?' <span class="k">限'+it.req+'系</span>':''}`};
 }
@@ -743,6 +750,14 @@ function shopModal(fresh){
   $('srrBtn').onclick=()=>{if(G.gold<rr){toast('打赏不够！');return;}G.gold-=rr;selSlot=-1;shopModal();};
   $('sgoBtn').onclick=()=>{hideShop();startWave(G.wave+1);};
 }
+const CORRUPT_VAL=[0,.02,.03,.04,.06];   // §6 恶堕值/件 r1/r2/r3/r4
+function corruptItem(it){                // 恶堕版：自身 mods/hidden/flags 数值翻倍(仅加法区，不开新乘区)
+  const c=Object.assign({},it);
+  if(it.mods){c.mods={};for(const k in it.mods)c.mods[k]=it.mods[k]*2;}
+  if(it.hidden){c.hidden={};for(const k in it.hidden)c.hidden[k]=it.hidden[k]*2;}
+  if(it.flags){c.flags={};for(const k in it.flags){const v=it.flags[k];c.flags[k]=(typeof v==='number')?v*2:v;}}
+  return c;
+}
 function buyOffer(i){
   const o=shopOffers[i];if(!o||o.sold)return;
   const p=price(o);
@@ -751,6 +766,10 @@ function buyOffer(i){
     const own=P.weapons.find(w=>w.id===o.w);
     if(!own&&P.weapons.length>=WEAPON_MAX){toast('武器槽已满！先卖一把腾位');return;}
     if(own)own.lvl++;else P.weapons.push({id:o.w,lvl:1,cd:0});
+  }else if(o.corrupt){                   // 恶堕版：翻倍数值 + 累加全局恶堕值(→敌人增强概率,封顶35%)
+    applyItem(corruptItem(o.it));
+    G.corrupt=Math.min(0.35,(G.corrupt||0)+(CORRUPT_VAL[o.it.rarity||1]||.03));
+    toast('恶堕侵蚀加深 '+Math.round(G.corrupt*100)+'%…观众开始异变');
   }else applyItem(o.it);
   G.gold-=p;P._shopSpend=(P._shopSpend||0)+p;o.sold=true;o.locked=false;selSlot=-1;  // 钞能力反应：累计本场消费
   shopModal(false);
@@ -814,11 +833,11 @@ function victory(){
 }
 
 /* ---------- 敌人（§5.1 数量优先 / §5.2 无尽指数）---------- */
-function baseScale(w){return 1+0.15*w+0.005*w*w;}                       // 出道段单体血量(§07 v0.3.8 加强 +20%)
+function baseScale(w){return 1+0.15*w+0.009*w*w;}                       // 单体血量(平衡#001 §5：w²系数 0.005→0.009 加速)
 function enemyHP(d,w,mini){
-  if(d.boss)return Math.round(mini ? 600*(1+0.16*w) : d.hp*(1+0.12*Math.max(0,w-20)));  // §6.3 完整Boss / mini-boss(v0.3.8 base 600·系数0.16)
-  if(d.elite)return d.hp*(1+0.16*w);                                    // 精英走线性(v0.3.8 0.14→0.16)，约同期小怪5-6倍
-  return w<=20 ? d.hp*baseScale(w) : d.hp*baseScale(20)*Math.pow(1.085,w-20);  // 波20后切指数(剪刀差·无尽复利 v0.3.8 1.085)
+  if(d.boss)return Math.round(mini ? 600*(1+0.19*w) : d.hp*(1+0.12*Math.max(0,w-20)));  // 完整Boss / mini-boss(精英系数同步 0.16→0.19)
+  if(d.elite)return d.hp*(1+0.19*w);                                    // 精英 0.16→0.19
+  return w<=20 ? d.hp*baseScale(w) : d.hp*baseScale(20)*Math.pow(1.09,w-20);  // 无尽复利 1.085→1.09
 }
 function enemyDMG(d,w){return d.dmg*(1+0.08*w);}                        // 接触伤害(v0.3.8 0.07→0.08)
 /* §1.1 移速上限档（v0.3.6）：肉墙×1.65 / 远程×1.50 / 高速冲锋×1.30；Boss 等未列默认肉墙 1.65 */
@@ -835,6 +854,9 @@ function spawnEnemy(type,opt){
     gold:d.gold,xp:d.xp,elite:d.elite,boss:d.boss,kind:d.kind,tex:d.tex,mini:mini,shooter:d.shooter,bomber:d.bomber,
     shootCd:rnd(1,2.5),slow:0,stun:0,mark:0,hitFlash:0,ai:0,vx:0,vy:0,
     spr:pick(ESPR[type]||ESPR.boss),bubble:0,gait:rnd(0,6.28),t1:rnd(1.5,3),t2:rnd(3,5),t3:rnd(2,4)};
+  if(!d.boss&&(G.corrupt||0)>0&&Math.random()<G.corrupt){   // §6 恶堕增强版：高血(×1.8)、收益×1.35(仍受收入上限)
+    e._enh=1;e.hp*=1.8;e.maxhp*=1.8;e.gold=Math.round(e.gold*1.35);e.xp=Math.round(e.xp*1.35);e.r*=1.12;
+  }
   if(d.boss){
     if(mini){e.x=rnd(140,AW-140);e.y=-40;e.miniBoss=1;e.gold=Math.round(120*(1+0.1*w));}   // mini-boss 混入波，不锁 bossRef
     else{e.x=AW/2;e.y=-40;G.bossRef=e;e.gold=Math.round(d.gold*(1+0.1*Math.max(0,w-20)));}
@@ -886,20 +908,21 @@ function hurtEnemy(e,dmg,isCrit,opt){
   }
   /* 状态（吃 dmgElem 独立乘区④） */
   if(opt.chill){e.slow=Math.max(e.slow,1.6);}
-  if(opt.poison){e.poison=3;e.poisonDps=(2+G.wave*0.3)*(1+st.dmgElem);e.poisonStk=Math.min(10,(e.poisonStk||0)+1);}
-  if(opt.burn){e.burn=2.5;e.burnDps=(4+G.wave*0.4)*(1+st.dmgElem);}        // 灼烧 DoT（比毒猛、时间短）
+  if(opt.poison){e.poison=3;e.poisonDps=Math.max(e.poisonDps||0,Math.max(2,dmg*0.22));e.poisonStk=Math.min(10,(e.poisonStk||0)+1);}   // §1.1 DoT 走命中伤害(已吃+300%封顶)，去掉随wave自增
+  if(opt.burn){e.burn=2.5;e.burnDps=Math.max(e.burnDps||0,Math.max(3,dmg*0.4));}        // 灼烧 DoT（来自玩家面板而非系统送的wave加成）
   if(opt.shock&&(e._shockCd||0)<=0){e._shockCd=0.3;e.shock=0.55;shockArc(e,dmg*0.5*(1+st.dmgElem),Math.min(4,(opt.shockJump||2)+(st.chain||0)));}  // 感电连锁（连接数封顶4，防过强）
   if(opt.vuln){e.vuln=2.5;e.vulnP=0.2;}
   if(A('resonator')&&(opt.burn||opt.shock||opt.poison||opt.chill||opt.vuln)&&Math.random()<.25){  // 状态共鸣器：25%补一种随机状态(不吃dmgElem)
     const x=pick(['burn','shock','poison','chill','vuln']);
     if(x==='chill')e.slow=Math.max(e.slow,1.2);
-    else if(x==='poison'){e.poison=Math.max(e.poison||0,2.5);e.poisonDps=Math.max(e.poisonDps||0,3+G.wave*.2);}
-    else if(x==='burn'){e.burn=Math.max(e.burn||0,2);e.burnDps=Math.max(e.burnDps||0,3+G.wave*.2);}
+    else if(x==='poison'){e.poison=Math.max(e.poison||0,2.5);e.poisonDps=Math.max(e.poisonDps||0,Math.max(2,dmg*0.15));}
+    else if(x==='burn'){e.burn=Math.max(e.burn||0,2);e.burnDps=Math.max(e.burnDps||0,Math.max(2,dmg*0.2));}
     else if(x==='vuln'){e.vuln=Math.max(e.vuln||0,2);e.vulnP=Math.max(e.vulnP||0,.15);}
     else if(x==='shock'&&(e._shockCd||0)<=0){e._shockCd=.3;e.shock=.5;}
   }
   if(opt.knockback&&!e.boss){const a=Math.atan2(e.y-P.y,e.x-P.x);e.x+=Math.cos(a)*opt.knockback*0.1;e.y+=Math.sin(a)*opt.knockback*0.1;}
-  if(st.lifesteal>0)P.hp=Math.min(st.maxhp,P.hp+dmg*st.lifesteal);   // 回魂
+  if(st.lifesteal>0){const now=performance.now();if(now-(P._lsSec||0)>=1000){P._lsSec=now;P._lsAcc=0;}   // §1.3 吸血按每秒封顶(≈maxhp×lifesteal×1.5/s)，攻速只增DPS不放大回血
+    const cap=st.maxhp*st.lifesteal*1.5;if((P._lsAcc||0)<cap){const heal=Math.min(dmg*st.lifesteal,cap-(P._lsAcc||0));P.hp=Math.min(st.maxhp,P.hp+heal);P._lsAcc=(P._lsAcc||0)+heal;}}
   if(!opt.noTrig){emit('onHit',{e,dmg,isCrit});
     if(P.mods[2]==='C'){P._charge=Math.min(100,(P._charge||0)+10);if(P._charge>=100){P._charge=0;P._overload=1;}}  // ③ 义体过载充能
     if(P._hype>0)skAOE(e.x,e.y,50,skHit('melee',.4),{col:'#ffd24a'});                                            // ④ 元气·全场嗨溅射
@@ -1222,7 +1245,7 @@ function explodeAt(x,y,r,dmg,st){
 const TRIG_FN={
   explode:(g)=>(c)=>{if(!c.e)return;const st=ST();explodeAt(c.e.x,c.e.y,g.r,(c.dmg||10)*g.dmg*(1+st.dmgElem),st);},
   dmgStack:(g)=>()=>{P._brave=Math.min(g.cap,(P._brave||0)+g.per);},
-  permaStack:(g)=>()=>{const cur=P._perma||0;P._perma=cur+g.per*Math.pow(0.7,Math.floor(cur/0.20));},
+  permaStack:(g)=>()=>{const cur=P._perma||0;P._perma=Math.min(0.4,cur+g.per*Math.pow(0.6,Math.floor(cur/0.12)));},   // §8 不灭热度削弱：per0.003·衰减0.6^(cur/0.12)·硬封顶+40%
   saveBuff:()=>()=>{P._saveT=1.5;P._nextCrit=1;},
   shield:(g)=>()=>{if(Math.random()<g.p)P._shield=Math.min(1,(P._shield||0)+1);},
   gold:(g)=>()=>{G.gold+=g.v;G.totalGold+=g.v;float(P.x,P.y-60,'开播红包 +'+g.v,'#ffd24a');},
@@ -1247,7 +1270,7 @@ const FX_STYLE={
   chair:'heavyslam', nunchaku:'nunchaku', bagFlail:'flail', comboDrum:'drumbeat', rhythmBaton:'baton',
   /* 投射弹道（render 用 b.kind 查） */
   kiss:'heart', hiNote:'beam', card:'card', cardRain:'card', disc:'disc', camera:'photo',
-  sling:'pellet', autotune:'wave', giftRPG:'rocket', bagMissile:'rocket', signLD:'bomb',
+  sling:'pellet', autotune:'wave', giftRPG:'rocket', bagMissile:'rocket', signLD:'bomb', gat:'pellet', smg:'pellet',
   memeCannon:'emoji', sparkler:'ember', readFreeze:'shard', cringeArc:'bolt', hitpiece:'paper',
   signLS:'starnote', holo:'spark', ultnote:'ultnote',
   /* nova 环 */
@@ -1353,7 +1376,7 @@ function fireWeapon(w,st){
     });
     return true;
   }
-  if(d.type==='homing'||d.type==='pierce'||d.type==='shotgun'||d.type==='boomerang'){
+  if(d.type==='homing'||d.type==='pierce'||d.type==='shotgun'||d.type==='boomerang'||d.type==='stream'){
     if(!t)return false;
     const sx=P.x, sy=P.y-30;                              // 子弹实际出膛点（上半身），瞄准须从这里算否则会偏高30px
     const aim=Math.atan2(t.y-sy,t.x-sx);
@@ -1664,11 +1687,16 @@ function update(dt){
   dmTick(dt);
 }
 function collect(d){
-  if(d.gold){const v=Math.round(d.gold*(1+ST().gold));G.gold+=v;G.totalGold+=v;emit('onGold',{v});if(P.passiveSkill&&P.passiveSkill.onGold)P.passiveSkill.onGold(v);}
+  if(d.gold){const Iw=1300*G.wave/(G.wave+15),wg=G.waveGold||0;          // §2.1 每波收入软上限 I(w)=1300w/(w+15)，无地板硬截断
+    const mult=Math.max(0,Math.min(1,1-wg/Iw)), v=Math.round(d.gold*(1+ST().gold)*mult);
+    if(v>0){G.gold+=v;G.totalGold+=v;G.waveGold=wg+v;emit('onGold',{v});if(P.passiveSkill&&P.passiveSkill.onGold)P.passiveSkill.onGold(v);}}
   if(d.xp)gainXp(d.xp*(1+ST().xp));
   if(P.passiveSkill&&P.passiveSkill.onPickup)P.passiveSkill.onPickup();   // 全网妹妹/大胃王
 }
 function gainXp(v){
+  const xcap=G.xpNext*1.5;                              // §2.3 每波经验软上限≈1.5级，超出只给极少(10%)
+  if((G.waveXp||0)>=xcap)v*=0.1;
+  G.waveXp=(G.waveXp||0)+v;
   G.xp+=v;
   while(G.xp>=G.xpNext){
     G.xp-=G.xpNext;G.level++;G.queuedLv++;
@@ -2143,8 +2171,11 @@ function drawEnemy(e){
     else{const s=e.spr,sc=(e.boss?1.15:1.2)*2;ctx.drawImage(s,-s.width*sc/2,-s.height*sc,s.width*sc,s.height*sc);}
   };
   drawSpr();
+  if(e._enh){ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.22+.12*Math.sin(performance.now()/170);drawSpr();}  // 恶堕增强版：红黑侵蚀辉光(重绘叠色,仅染精灵)
   if(e.hitFlash>0){ctx.globalCompositeOperation='lighter';ctx.globalAlpha=Math.min(1,e.hitFlash*4.5);drawSpr();}  // 命中泛白发光（同图叠 lighter）
   ctx.restore();
+  if(e._enh){ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.2+.1*Math.sin(performance.now()/150);   // 恶堕暗红外发光环
+    ctx.fillStyle='#ff2a4a';ctx.beginPath();ctx.arc(e.x,e.y,e.r*1.5,0,7);ctx.fill();ctx.restore();}
   if(e.burn>0||e.shock>0){                               // 灼烧/感电状态辉光（叠加发光，不糊住贴图）
     ctx.save();ctx.globalCompositeOperation='lighter';
     ctx.globalAlpha=.22+Math.abs(Math.sin(performance.now()/(e.shock>0?40:90)))*.22;

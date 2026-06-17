@@ -17,6 +17,8 @@ const WEAPONS={
   selfie: {name:'自拍杆',   desc:'大范围横扫',         price:28, base:16, cd:1.65, range:140, type:'melee',  arc:2.7, cat:'melee', scales:{dmgMelee:1,range:.5}, tags:['melee'], syn:'H', col:'#b8c0d0', tf:{2:{arc:.4},3:{knockback:12},4:{drag:1}}},
   disc:   {name:'周边光碟', desc:'散弹式专辑投掷',     price:30, base:8,  cd:1.25, range:320, type:'shotgun',cat:'ranged', scales:{dmgRanged:1,multishot:1}, tags:['ranged'], syn:'S', col:'#8fd0ff', tf:{2:{multishot:1},3:{bounce:1},4:{boomerang:1}}},
   holo:   {name:'全息分身', desc:'投影分身帮忙营业',   price:48, base:8,  cd:7.5,  range:0,   type:'summon', cat:'summon', scales:{engi:1}, tags:['tech'], syn:'C', col:'#7af0ea', tf:{2:{summonN:1},3:{cloneArm:1},4:{cloneCrit:1}}},
+  gat:    {name:'应援加特林', desc:'极高射速连射，弹幕铺面', price:38, base:3, cd:0.12, range:300, type:'stream', cat:'ranged', scales:{dmgRanged:1,aspd:.5}, tags:['ranged'], syn:'S', col:'#7af07a', tf:{2:{multishot:1},3:{pierce:1},4:{aspd:.2}}},
+  smg:    {name:'冲锋话筒',   desc:'快速点射，单发略高',     price:34, base:5, cd:0.2,  range:260, type:'stream', cat:'ranged', scales:{dmgRanged:1,aspd:.5}, tags:['ranged'], syn:'S', col:'#9fe0ff', tf:{2:{multishot:1},3:{pierce:1},4:{bounce:1}}},
   /* ===== v0.3.4 武器扩展库（§6 · 按伤害系分类）===== */
   /* 6.1 近台魅力系 melee */
   micSpear:    {name:'麦架长枪',   desc:'直线突刺',         price:30, base:22, cd:1.2,  range:130, type:'melee',  arc:0.7, cat:'melee', scales:{dmgMelee:1,range:.5}, tags:['melee'], syn:'H', col:'#c8c0d8', tf:{2:{pierce:1},3:{knockback:10},4:{arc:.5}}},
@@ -127,21 +129,21 @@ function itemById(id){if(!_ITEM_IDX){_ITEM_IDX={};for(const it of ITEMS)_ITEM_ID
 const RARITY_NAME=['','路人安利','热评推荐','榜一钦点','封神'], RARITY_COL=['','#9aa0b0','#5ad8a0','#ffb84a','#ff7bc1'];
 const ITEMS=[
   /* A·属性件（地基，~30%） */
-  {id:'drink', cls:'A',rarity:1,name:'能量饮料',  desc:'手速 +8%',        price:26, mods:{aspd:.08}},
+  {id:'drink', cls:'A',rarity:1,name:'能量饮料',  desc:'手速 +5%',        price:26, mods:{aspd:.05}},
   {id:'filter',cls:'A',rarity:1,name:'美颜滤镜',  desc:'临场(闪避) +5%',  price:28, mods:{dodge:.05}},
-  {id:'sound', cls:'A',rarity:1,name:'声卡',      desc:'魅力 +8%',        price:30, mods:{dmg:.08}},
+  {id:'sound', cls:'A',rarity:1,name:'声卡',      desc:'魅力 +5%',        price:30, mods:{dmg:.05}},
   {id:'light', cls:'A',rarity:1,name:'补光灯',    desc:'存在感(范围) +10%',price:24, mods:{range:.10}},
-  {id:'gym',   cls:'A',rarity:1,name:'健身环',    desc:'近台魅力 +12%',   price:30, mods:{dmgMelee:.12}, set:'应援团'},
-  {id:'lens',  cls:'A',rarity:1,name:'长焦镜头',  desc:'远台魅力 +12%',   price:30, mods:{dmgRanged:.12}},
-  {id:'warmer',cls:'A',rarity:2,name:'暖手宝',    desc:'应援共鸣(状态伤) +14%',price:34, mods:{dmgElem:.14}},
-  {id:'battery',cls:'A',rarity:2,name:'义体电池', desc:'义体改装 +15%',   price:36, mods:{engi:.15}, set:'义体矩阵'},
+  {id:'gym',   cls:'A',rarity:1,name:'健身环',    desc:'近台魅力 +8%',    price:30, mods:{dmgMelee:.08}, set:'应援团'},
+  {id:'lens',  cls:'A',rarity:1,name:'长焦镜头',  desc:'远台魅力 +8%',    price:30, mods:{dmgRanged:.08}},
+  {id:'warmer',cls:'A',rarity:2,name:'暖手宝',    desc:'应援共鸣(状态伤) +9%',price:34, mods:{dmgElem:.09}},
+  {id:'battery',cls:'A',rarity:2,name:'义体电池', desc:'义体改装 +10%',   price:36, mods:{engi:.10}, set:'义体矩阵'},
   {id:'spray', cls:'A',rarity:1,name:'止汗喷雾',  desc:'抗压(护甲) +2',   price:32, mods:{armor:2}},
   {id:'assist',cls:'A',rarity:2,name:'贴心助理',  desc:'心态回复 +0.6/s', price:40, mods:{regen:.6}},
   {id:'lottery',cls:'A',rarity:1,name:'转发抽奖', desc:'玄学 +12%',       price:22, mods:{luck:.12}},
   {id:'biz',   cls:'A',rarity:1,name:'商务对接',  desc:'恰饭 +3（波末打赏）',price:24, mods:{harvest:3}},
   {id:'banner',cls:'A',rarity:1,name:'应援手幅',  desc:'心态上限 +15',    price:30, mods:{maxhp:15}, set:'应援团'},
   {id:'lozenge',cls:'A',rarity:2,name:'护嗓含片', desc:'回魂(吸血) +4%',  price:34, mods:{lifesteal:.04}},
-  {id:'script',cls:'A',rarity:1,name:'剧本台词卡',desc:'暴击率 +6%',      price:28, mods:{crit:.06}},
+  {id:'script',cls:'A',rarity:1,name:'剧本台词卡',desc:'暴击率 +4%',      price:28, mods:{crit:.04}},
   {id:'magnet',cls:'A',rarity:1,name:'吸粉体质',  desc:'拾取范围 +40',    price:20, hidden:{pickup:40}},
   /* B·机制件（改行为，~20%） */
   {id:'mBounce',cls:'B',rarity:2,name:'弹幕跳弹', desc:'子弹弹射 +1（打到一个弹下一个）',price:46, flags:{bounce:1}, tags:['bounce']},
@@ -156,7 +158,7 @@ const ITEMS=[
   /* C·触发件（事件回调，质变，~20%） */
   {id:'tHighlight',cls:'C',rarity:3,name:'高光剪辑', desc:'暴击时小范围爆炸（吃应援共鸣）',price:54, trig:{on:'onCrit',fn:'explode',icd:.4,args:{r:54,dmg:.5}}},
   {id:'tBrave', cls:'C',rarity:2,name:'越战越勇',  desc:'本波击杀 +1.5%魅力(上限45%,波末清零)',price:46, trig:{on:'onKill',fn:'dmgStack',args:{per:.015,cap:.45,clear:1}}},
-  {id:'tEndless',cls:'C',rarity:4,name:'不灭热度', desc:'击杀永久+0.5%魅力(每+20%后增幅递减)',price:80, trig:{on:'onKill',fn:'permaStack',args:{per:.005}}},
+  {id:'tEndless',cls:'C',rarity:4,name:'不灭热度', desc:'击杀永久+0.3%魅力(递减,硬封顶+40%)',price:80, trig:{on:'onKill',fn:'permaStack',args:{per:.003}}},
   {id:'tSave',  cls:'C',rarity:3,name:'临危救场',  desc:'闪避后1.5s移速+25%且下一击必暴',price:48, trig:{on:'onDodge',fn:'saveBuff',icd:1.0}},
   {id:'tShield',cls:'C',rarity:3,name:'控评护盾',  desc:'受击30%获1层吸收护盾(5s)',price:50, trig:{on:'onHurt',fn:'shield',icd:5,args:{p:.3}}},
   {id:'tRed',   cls:'C',rarity:1,name:'开播红包',  desc:'开波 +20 打赏',  price:30, trig:{on:'onWaveStart',fn:'gold',args:{v:20}}},
@@ -211,14 +213,14 @@ const SETS={
 
 /* ---- 升级（涨粉里程碑，覆盖新能力值）---- */
 const UPGRADES=[
-  {name:'声压提升',desc:'魅力 +6%',     mod:{dmg:.06}},
-  {name:'近台魅力',desc:'近台魅力 +9%', mod:{dmgMelee:.09}},
-  {name:'远台魅力',desc:'远台魅力 +9%', mod:{dmgRanged:.09}},
-  {name:'应援共鸣',desc:'状态伤害 +10%',mod:{dmgElem:.10}},
-  {name:'手速练习',desc:'手速 +6%',     mod:{aspd:.06}},
+  {name:'声压提升',desc:'魅力 +4%',     mod:{dmg:.04}},
+  {name:'近台魅力',desc:'近台魅力 +6%', mod:{dmgMelee:.06}},
+  {name:'远台魅力',desc:'远台魅力 +6%', mod:{dmgRanged:.06}},
+  {name:'应援共鸣',desc:'状态伤害 +6%', mod:{dmgElem:.06}},
+  {name:'手速练习',desc:'手速 +4%',     mod:{aspd:.04}},
   {name:'心理建设',desc:'心态上限 +8',  mod:{maxhp:8}},
   {name:'舞步训练',desc:'舞步(移速) +5%',mod:{speed:.05}},
-  {name:'整活天赋',desc:'暴击率 +4%',   mod:{crit:.04}},
+  {name:'整活天赋',desc:'暴击率 +3%',   mod:{crit:.03}},
   {name:'临场反应',desc:'临场(闪避) +3%',mod:{dodge:.03}},
   {name:'存在感',  desc:'存在感(范围) +8%',mod:{range:.08}},
   {name:'自我调节',desc:'心态回复 +0.3/s',mod:{regen:.3}},
