@@ -2712,6 +2712,21 @@ function devCheat(k){
   else if(k==='heat'){G.infHeat=!G.infHeat;if(G.infHeat)P.heat=100;}
   buildDev();
 }
+/* dev·跳到指定波：清场+关弹窗，直接开第 n 波（无 n 则读输入框） */
+function devJumpWave(n){
+  if(n==null){const el=$('devWaveIn');n=el?parseInt(el.value,10):G.wave;}
+  n=Math.max(1,Math.min(99,Math.round(n)||1));
+  cutscene=null;G.ultCut=null;paused=false;
+  const ov=$('overlay');if(ov)ov.classList.remove('show');
+  const so=$('shopOv');if(so&&so.classList.contains('show')&&typeof hideShop==='function')hideShop();
+  const ts=$('titleScreen');if(ts)ts.style.display='none';
+  G.drops=[];G.enemies=[];G.ebullets=[];G.bullets=[];G.zones=[];G.clones=[];G.allies=[];G.fields=[];   // 清场，避免旧波残留
+  P._skT=0;P._convWin=0;P._moshT=0;
+  G.scr='play';
+  startWave(n);
+  if(P.passiveSkill&&P.passiveSkill.grant)P.passiveSkill.grant();   // 重挂永久陪伴(青梅等)
+  toast('跳到第 '+n+' 波');buildDev();
+}
 function buildDev(){
   const d=$('dev');if(!d)return;
   let html='<h4>🛠 开发者模式 — '+playerSprite(P.mods).name+'</h4>';
@@ -2725,6 +2740,8 @@ function buildDev(){
   html+='<div class="row cheat"><b></b><button onclick="devCheat(\'wave\')">跳过本波</button><button onclick="devCheat(\'elite\')">召唤精英</button></div>';
   html+='<div class="row cheat"><b></b><button onclick="devCheat(\'lv\')">+1人气级</button><button class="'+(G.god?'on':'')+'" onclick="devCheat(\'god\')">无敌：'+(G.god?'开':'关')+'</button></div>';
   html+='<div class="row cheat"><b></b><button class="'+(G.infHeat?'on':'')+'" onclick="devCheat(\'heat\')">无限元气：'+(G.infHeat?'开':'关')+'</button></div>';
+  html+='<div class="row cheat"><b>跳关</b><input id="devWaveIn" type="number" min="1" max="99" value="'+(G.wave||1)+'" style="width:46px;background:#0d0a16;color:#7af0ea;border:1px solid #3a2f55;border-radius:5px;padding:2px 4px;font-family:Menlo,monospace"> <button onclick="devJumpWave()">跳到此波</button></div>';
+  html+='<div class="row cheat"><b></b>'+[5,10,15,19,20,25,30].map(n=>'<button onclick="devJumpWave('+n+')">'+n+'波</button>').join('')+'</div>';
   html+='<div class="hint">按 <b>`</b>(Esc下方) 开关 ｜ 任意时刻可改形态，立即在直播窗 / 场上生效</div>';
   d.innerHTML=html;
 }
