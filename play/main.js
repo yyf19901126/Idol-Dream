@@ -208,10 +208,11 @@ function sfx(kind){
   else if(kind==='gift'){                             // 礼物：甜蜜小琶音
     _osc(659,.12,'triangle',.10,659); _osc(880,.12,'triangle',.075,880,N+.06); _osc(1319,.14,'sine',.05,1319,N+.12);
   }
-  else if(kind==='cheer'){                            // 全场欢呼：噪声涌起(掌声) + 一串明亮欢呼上扬音
-    _noise(.75,.11,1700); _noise(.55,.06,3200);
-    for(let i=0;i<8;i++){const f=480+Math.random()*960;_osc(f,.5,'triangle',.028,f*1.5,N+i*0.045);}
-    _osc(523,.55,'sine',.06,1046,N+.04); _osc(659,.6,'sine',.045,1318,N+.12); _osc(784,.5,'sine',.035,1568,N+.2);
+  else if(kind==='cheer'){                            // 全场观众欢呼：人群轰鸣 + 鼓掌 + 一片上扬"wooo" + 零星口哨
+    _noise(.95,.14,1400); _noise(.75,.085,2600); _noise(.5,.05,5200);      // 人群轰鸣(低) + 掌声(中高) + 嘶声(高)
+    for(let i=0;i<12;i++){const f=360+Math.random()*760;_osc(f,.55,'triangle',.026,f*(1.4+Math.random()*0.3),N+i*0.035);}  // 一片各异的上扬欢呼声
+    _osc(523,.62,'sine',.055,1046,N+.04); _osc(659,.66,'sine',.045,1318,N+.14); _osc(784,.6,'sine',.035,1568,N+.26);        // 主升"wooo"
+    _osc(1900,.14,'sine',.04,2700,N+.18); _osc(2200,.12,'sine',.03,3100,N+.5);                                              // 口哨
   }
 }
 function updateSfxBtn(){const b=document.getElementById('sfxToggle');if(b){b.textContent=SFX_ON?'🔊':'🔇';b.classList.toggle('off',!SFX_ON);}}
@@ -236,9 +237,10 @@ const MUS_SONGS=[
   /* 4 少女闺房：甜系 J-pop 王道进行 F-G-Em-Am */
   {bpm:120, bw:'triangle',pw:'sine',aw:'triangle', bv:.55,pv:.16,av:.30, arpEvery:2,arpOct:2, bassOn:[0,8],
    prog:[{b:87.31,c:[349.23,440,523.25]},{b:98,c:[392,493.88,587.33]},{b:82.41,c:[329.63,392,493.88]},{b:110,c:[440,523.25,659.25]}]},
-  /* 5 舞台：明亮燃向偶像主题曲（大调 C-G-Am-F，每拍贝斯、16分密琶音） */
-  {bpm:134, bw:'triangle',pw:'sine',aw:'triangle', bv:.55,pv:.15,av:.32, arpEvery:1,arpOct:1, bassOn:[0,4,8,12],
-   prog:[{b:130.81,c:[523.25,659.25,783.99]},{b:196,c:[392,493.88,587.33]},{b:110,c:[440,523.25,659.25]},{b:87.31,c:[349.23,440,523.25]}]},
+  /* 5 出道·舞台：日系二次元偶像主题曲（王道進行 F-G-Em-Am + 甜亮主旋律；柔和不喧宾夺主） */
+  {bpm:122, bw:'triangle',pw:'sine',aw:'sine', bv:.42,pv:.12,av:.15, arpEvery:2,arpOct:1, bassOn:[0,8], lv:.10,
+   lead:[[698,0,880,0,1046,0,880,0],[784,0,988,0,587,0,784,0],[659,0,784,0,988,0,784,0],[880,0,659,0,523,0,440,0]],   // 4小节甜亮顶旋律(各小节和弦音,二次元偶像感)
+   prog:[{b:174.61,c:[349.23,440,523.25]},{b:196,c:[392,493.88,587.33]},{b:164.81,c:[329.63,392,493.88]},{b:220,c:[440,523.25,659.25]}]},
 ];
 function curMusStage(){return Math.min(5,(typeof P!=='undefined'&&P.mods)?P.mods.length:0);}
 function _mosc(freq,dur,type,vol,t0){          // 音乐专用振荡器（走 musicGain，柔和起音）
@@ -253,6 +255,7 @@ function _musStepFn(step,t){
   if(S.bassOn.indexOf(b)>=0) _mosc(C.b,0.42,S.bw,S.bv,t);                 // 贝斯落点
   if(b===0) C.c.forEach(f=>_mosc(f,1.7,S.pw,S.pv,t));                     // 整小节铺底 pad
   if(b%S.arpEvery===0){const seq=[C.c[0],C.c[1],C.c[2],C.c[1]];_mosc(seq[Math.floor(b/S.arpEvery)%4]*S.arpOct,0.2,S.aw,S.av,t);}  // 琶音
+  if(S.lead&&(b&1)===0){const f=S.lead[bar][b>>1];if(f)_mosc(f,0.30,'triangle',S.lv,t);}   // 甜亮主旋律(仅终态·二次元偶像顶旋律)
 }
 function _musTick(){
   if(!AC||AC.state!=='running'){_musNext=AC?AC.currentTime+0.1:0;return;}  // 后台挂起时不抢拍
@@ -1155,7 +1158,7 @@ function startUltCut(sk){
 function doCast(sk){                                     // 真正释放大招效果（cut-in 结束后调用）
   if(sk.dur){P._skT=sk.dur;P._skTick=0;}
   fx({type:'ring',x:P.x,y:P.y,r:180,col:sk.col||'#ff7bc1',ttl:.5}); fx({type:'flash',ttl:.18,col:sk.col||'#ff9ec4'});
-  addShake(8); hitStop(.06); sfx('skill'); danmaku('技能·'+sk.name+'！','sys');
+  addShake(8); hitStop(.06); sfx('cheer'); danmaku('技能·'+sk.name+'！','sys');   // 大招释放=全场欢呼
   if(sk.on)sk.on();
 }
 /* 技能/buff/领域/友军/mosh/dash 每帧推进 */
