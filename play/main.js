@@ -44,6 +44,12 @@ addEventListener('resize',fitLayout);
 
 /* ---------- 全局状态 ---------- */
 let ESPR,COIN,HOLO;
+/* 大招 cut-in 立绘（按需懒加载，仅当前形态会用到一张） */
+const ULT_IMG={};
+function getUltImg(code){
+  if(ULT_IMG[code]!==undefined)return ULT_IMG[code];
+  const im=new Image();im.src='art/ult/'+code+'.jpg';ULT_IMG[code]=im;return im;
+}
 /* 敌人贴图（Seedream 粗像素，绿幕抠透明）；加载完即用，未加载回退程序化 ESPR */
 const ENEMY_IMG={};
 ['luren','shuijun','penzi','baipiao','duijia','heifen','leping','boss'].forEach(t=>{
@@ -200,6 +206,11 @@ function sfx(kind){
   }
   else if(kind==='gift'){                             // 礼物：甜蜜小琶音
     _osc(659,.12,'triangle',.10,659); _osc(880,.12,'triangle',.075,880,N+.06); _osc(1319,.14,'sine',.05,1319,N+.12);
+  }
+  else if(kind==='cheer'){                            // 全场欢呼：噪声涌起(掌声) + 一串明亮欢呼上扬音
+    _noise(.75,.11,1700); _noise(.55,.06,3200);
+    for(let i=0;i<8;i++){const f=480+Math.random()*960;_osc(f,.5,'triangle',.028,f*1.5,N+i*0.045);}
+    _osc(523,.55,'sine',.06,1046,N+.04); _osc(659,.6,'sine',.045,1318,N+.12); _osc(784,.5,'sine',.035,1568,N+.2);
   }
 }
 function updateSfxBtn(){const b=document.getElementById('sfxToggle');if(b){b.textContent=SFX_ON?'🔊':'🔇';b.classList.toggle('off',!SFX_ON);}}
@@ -377,7 +388,7 @@ function startWave(w){
 function endWave(){
   emit('onWaveEnd',{});P._brave=0;P._cashBuff=0;   // 越战越勇/钞能力反应波末清零
   if(G.drops.length)toast('本波有 '+G.drops.length+' 份打赏没捡，浪费了！');  // 没捡的打赏不再自动收，作废
-  G.drops=[];G.enemies=[];G.ebullets=[];G.bullets=[];G.zones=[];G.clones=[];G.allies=[];G.fields=[];
+  G.drops=[];G.enemies=[];G.ebullets=[];G.bullets=[];G.zones=[];G.clones=[];G.allies=[];G.fields=[];G.ultCut=null;
   P._skT=0;P._convWin=0;P._moshT=0;P._hype=0;                          // 波末清掉技能临时态（永久陪伴分身在 grant，已清，需重挂）
   if(P.passiveSkill&&P.passiveSkill.grant)P.passiveSkill.grant();      // 重挂永久陪伴（如青梅分身）
   if(P.mods[2]==='B'&&G.noHit){G.gold+=18;G.totalGold+=18;toast('无伤波次！观众追加打赏 +18');}
@@ -1068,19 +1079,28 @@ const SKILL_DESC={
 function grantFormSkill(){
   const code=P.mods.join(''); const sk=SKILLS[code]; if(!sk)return;
   P.activeSkill=null; P.passiveSkill=null; P._eatScale=0; P._cheer=0; P._moshT=0; P._skT=0;
-  if(sk.type==='active'){P.activeSkill=sk;P.skillCd=0;}
+  if(sk.type==='active'){P.activeSkill=sk;P.skillCd=0;if(!sk.weapon)getUltImg(code);}   // 预载大招 cut-in 立绘
   else if(sk.type==='passive'){P.passiveSkill=sk;if(sk.grant)sk.grant();}
   else if(sk.type==='weapon'){const have=P.weapons.find(w=>w.id===sk.weapon);if(have)have.lvl=Math.min(4,have.lvl+1);else if(P.weapons.length<WEAPON_MAX)P.weapons.push({id:sk.weapon,lvl:2,cd:0});else{P._pendWeapon=sk.weapon;toast('武器槽满！卖一把可换上「'+sk.name+'」');}}
   const tn={active:'主动·空格',passive:'被动',weapon:'专属武器'}[sk.type];
   setTimeout(()=>danmaku('✨ 解锁专属技能：'+sk.name+'（'+tn+'）','sys'),300);
 }
 function castSkill(){
-  const sk=P.activeSkill; if(G.scr!=='play'||!sk)return;
+  const sk=P.activeSkill; if(G.scr!=='play'||!sk||G.ultCut)return;
   if(P._skT>0){ if(sk.repress)sk.repress(); return; }   // 二段（俯冲等）
   if(P.skillCd>0)return;
   P.skillCd=sk.cd*(A('automation')?.75:1);
-  if(sk.dur){P._skT=sk.dur;P._skTick=0;}
   if(sk.weapon){ if(sk.on)sk.on(); return; }            // 专属武器·空格领取：不放大招演出
+  startUltCut(sk);                                       // ① 全场暂停 + 屏闪 + 大招 cut-in 演出，结束后 ② 真正释放
+}
+/* 大招 cut-in：全场暂停、屏闪、中央展示大招立绘(漫画聚焦框+集中线+欢呼)，结束回到游戏触发大招 */
+function startUltCut(sk){
+  const code=P.mods.join('');
+  G.ultCut={sk,code,img:getUltImg(code),name:sk.name,col:sk.col||'#7af0ea',t:0,dur:1.7,fired:false};
+  fx({type:'flash',ttl:.28,col:'#fff'}); addShake(7); sfx('cheer');      // 屏闪一下 + 全场欢呼
+}
+function doCast(sk){                                     // 真正释放大招效果（cut-in 结束后调用）
+  if(sk.dur){P._skT=sk.dur;P._skTick=0;}
   fx({type:'ring',x:P.x,y:P.y,r:180,col:sk.col||'#ff7bc1',ttl:.5}); fx({type:'flash',ttl:.18,col:sk.col||'#ff9ec4'});
   addShake(8); hitStop(.06); sfx('skill'); danmaku('技能·'+sk.name+'！','sys');
   if(sk.on)sk.on();
@@ -1961,6 +1981,47 @@ function updateSkillPanel(){
   $('skHeat').style.display=isY?'flex':'none';
   if(isY){const hf=$('skHeatFill');hf.style.width=Math.min(100,P.heat)+'%';hf.classList.toggle('full',P.heat>=100);}
 }
+/* 大招 cut-in 覆盖层：暗场聚焦 + 漫画集中线 + 漫画框立绘 + 大招名横幅 */
+function drawUltCut(c){
+  const W=AW,H=AH,cx=W/2,cy=H/2,T=performance.now(),k=c.t/c.dur,col=c.col;
+  const a=Math.max(0,Math.min(k/0.14,(k>0.84)?(1-k)/0.16:1));        // 整体淡入淡出
+  let sc; if(k<0.12)sc=0.72+0.46*(k/0.12); else if(k<0.24)sc=1.18-0.18*((k-0.12)/0.12); else sc=1;  // 弹入(过冲)
+  ctx.save();
+  // 暗化全场（聚焦）
+  ctx.globalAlpha=0.74*a;ctx.fillStyle='#08040e';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+  // 漫画集中线（放射 speed lines）
+  ctx.save();ctx.translate(cx,cy);const rot=T/2600,outer=Math.max(W,H);
+  for(let i=0;i<46;i++){const ang=i*(Math.PI*2/46)+rot,inner=185+(i%3)*30;
+    ctx.fillStyle=i%2?col:'#ffffff';ctx.globalAlpha=(i%2?0.17:0.10)*a;
+    ctx.beginPath();ctx.moveTo(Math.cos(ang-0.014)*inner,Math.sin(ang-0.014)*inner);
+    ctx.lineTo(Math.cos(ang-0.055)*outer,Math.sin(ang-0.055)*outer);
+    ctx.lineTo(Math.cos(ang+0.055)*outer,Math.sin(ang+0.055)*outer);
+    ctx.lineTo(Math.cos(ang+0.014)*inner,Math.sin(ang+0.014)*inner);ctx.closePath();ctx.fill();}
+  ctx.restore();
+  // 漫画框 + 立绘（轻微倾斜增加冲击）
+  const img=c.img, ih=H*0.6, iw=(img&&img.width)?img.width*ih/img.height:ih*0.66;
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(-0.035);ctx.scale(sc,sc);ctx.globalAlpha=a;
+  const fw=iw+22,fh=ih+22;
+  ctx.shadowColor=col;ctx.shadowBlur=34;                                // 外发光
+  ctx.fillStyle='#0d0a16';ctx.fillRect(-fw/2,-fh/2,fw,fh);ctx.shadowBlur=0;
+  if(img&&img.width){ctx.imageSmoothingEnabled=true;ctx.drawImage(img,-iw/2,-ih/2,iw,ih);}
+  else{ctx.fillStyle='#16121e';ctx.fillRect(-iw/2,-ih/2,iw,ih);ctx.fillStyle=col;ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText('✦',0,8);}
+  // 漫画双描边框 + 四角
+  ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.strokeRect(-fw/2,-fh/2,fw,fh);
+  ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.strokeRect(-fw/2+5,-fh/2+5,fw-10,fh-10);
+  ctx.fillStyle=col;const cc=16;[[-fw/2,-fh/2,1,1],[fw/2,-fh/2,-1,1],[-fw/2,fh/2,1,-1],[fw/2,fh/2,-1,-1]].forEach(([x,y,sx,sy])=>{
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+cc*sx,y);ctx.lineTo(x,y+cc*sy);ctx.closePath();ctx.fill();});
+  ctx.restore();
+  // 顶部 ULTRA! 标 + 底部大招名横幅
+  ctx.globalAlpha=a;ctx.textAlign='center';
+  ctx.font='italic 900 30px "PingFang SC",sans-serif';ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=16;
+  ctx.fillText('★ ULTRA ★',cx,cy-ih/2-26);ctx.shadowBlur=0;
+  const by=cy+ih/2+20,bw=Math.min(W-40,c.name.length*30+90),bh=42;
+  ctx.fillStyle='#0d0a16';ctx.fillRect(cx-bw/2,by,bw,bh);
+  ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.shadowColor=col;ctx.shadowBlur=14;ctx.strokeRect(cx-bw/2,by,bw,bh);ctx.shadowBlur=0;
+  ctx.fillStyle='#fff';ctx.font='bold 24px "PingFang SC",sans-serif';ctx.fillText(c.name,cx,by+29);
+  ctx.textAlign='left';ctx.globalAlpha=1;ctx.restore();
+}
 function drawEnemy(e){
   const img=ENEMY_IMG[e.type]||ENEMY_IMG[e.tex];      // 新Boss无专属贴图→用映射的现有贴图
   ctx.save();
@@ -2495,7 +2556,7 @@ function pauseModal(){
 }
 let last=performance.now(),paused=false;
 addEventListener('keydown',e=>{
-  if(e.key==='Escape'&&(G.scr==='play'||paused)){
+  if(e.key==='Escape'&&!G.ultCut&&(G.scr==='play'||paused)){
     paused=!paused;
     if(paused)pauseModal();
     else {hideHovTip();hidePanel();}
@@ -2504,11 +2565,15 @@ addEventListener('keydown',e=>{
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;
   if(musicGain){const w=musicWant();musicGain.gain.value+=(w-musicGain.gain.value)*0.10;}  // 背景音乐：仅战斗渐入，过场/商店渐出
-  if(G.scr==='play'&&!paused){
+  if(G.ultCut){                                          // 大招 cut-in：全场暂停推进演出，结束即真正释放
+    const c=G.ultCut; c.t+=dt;
+    if(c.t>=c.dur){G.ultCut=null;doCast(c.sk);}
+  }else if(G.scr==='play'&&!paused){
     if((G.hitStop||0)>0){G.hitStop-=dt;}     // 命中顿帧：冻结一瞬强化打击感（仍渲染）
     else update(dt);
   }
   if(G.scr==='play'||G.scr==='modal'){render();updateHud(dt);}
+  if(G.ultCut)drawUltCut(G.ultCut);                      // cut-in 覆盖层画在最上面
   drawStream(now/1000);
   requestAnimationFrame(loop);
 }
