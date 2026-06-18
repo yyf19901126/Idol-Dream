@@ -105,17 +105,13 @@ function ST(){
   if(_b.armor)armor+=_b.armor; if(_b.range)range+=_b.range;
   if(A('noLifesteal'))lifesteal=0;                  // 共生菌株代价
   if(A('hpScale'))maxhp*=A('hpScale');
-  let critM=1.8+A('critMult')+nCrit;                                 // §1.2 暴击软上限60%：超出部分 1%暴击率→+2%暴伤
-  if(crit>0.6){critM+=(crit-0.6)*2;crit=0.6;}
-  if(dodge>0.3)dodge=0.3+(dodge-0.3)*0.5;                            // §7 闪避>30%后每点只给0.5%
-  dodge=Math.min(0.5,dodge);                                         // §7 闪避硬顶50%
-  lifesteal=Math.min(0.15,lifesteal);                               // §7 吸血硬顶+15%
+  // 暴击率/吸血不设上限(面板显示=实际生效,与道具描述一致)；暴击>100%只是无额外意义、不转暴伤
   return{
     maxhp:Math.round(Math.max(1,maxhp)), regen, lifesteal,
     dmg, dmgMelee, dmgRanged, dmgElem, engi,
-    aspd, crit, range:Math.min(1.5,range), armor, dodge,            // crit/dodge 已在上方按软上限处理
+    aspd, crit, range:Math.min(1.5,range), armor, dodge:Math.min(.6,dodge),   // 暴击/吸血不封顶；闪避维持原硬顶60%
     speed, luck, harvest, xp, gold,
-    critMult:Math.min(3.0,critM), pickup:200+A('pickup'),
+    critMult:Math.min(3.0,1.8+A('critMult')+nCrit), pickup:200+A('pickup'),
     bounce:A('bounce'),pierce:A('pierce')+(m[1]==='S'?1:0)+(_b.pierce||0),multishot:A('multishot')+(_b.multishot||0),split:A('split'),
     homing:A('homing')+(_b.homing||0),orbit:A('orbit'),chain:A('chain'),knockback:A('knockback'),
     projSpd:1+A('projSpd'),projSize:1+A('projSize'),procLuck:A('procLuck'),
@@ -537,8 +533,8 @@ function price(o){
   if(o.w){
     const own=P.weapons.find(w=>w.id===o.w);
     p=WEAPONS[o.w].price*(1+G.wave*.06)*(own?1+own.lvl*.45:1);
-  }else{const owned=P.itemIds.filter(id=>id===o.it.id).length;   // §2.2 同名道具第n件涨价 ×1.15^(n-1)，根治便宜属性件无脑堆叠
-    p=o.it.price*(1+G.wave*.04)*(o.it.rarity?1+(o.it.rarity-1)*.18:1)*Math.pow(1.15,owned);}
+  }else{const owned=P.itemIds.filter(id=>id===o.it.id).length;   // §2.2 同名道具涨价：线性递增并封顶(非指数),抑制无脑堆叠又不至于贵到买不起
+    p=o.it.price*(1+G.wave*.04)*(o.it.rarity?1+(o.it.rarity-1)*.18:1)*Math.min(2.5,1+owned*0.18);}
   let mult=1; if(o.corrupt)mult=1.5;                             // §6 恶堕版售价×1.5
   return Math.round(p*disc*mult);
 }
@@ -768,7 +764,7 @@ function buyOffer(i){
     if(own)own.lvl++;else P.weapons.push({id:o.w,lvl:1,cd:0});
   }else if(o.corrupt){                   // 恶堕版：翻倍数值 + 累加全局恶堕值(→敌人增强概率,封顶35%)
     applyItem(corruptItem(o.it));
-    G.corrupt=Math.min(0.35,(G.corrupt||0)+(CORRUPT_VAL[o.it.rarity||1]||.03));
+    G.corrupt=Math.min(1.0,(G.corrupt||0)+(CORRUPT_VAL[o.it.rarity||1]||.03));   // 恶堕值可至100%(全场敌人增强)
     toast('恶堕侵蚀加深 '+Math.round(G.corrupt*100)+'%…观众开始异变');
   }else applyItem(o.it);
   G.gold-=p;P._shopSpend=(P._shopSpend||0)+p;o.sold=true;o.locked=false;selSlot=-1;  // 钞能力反应：累计本场消费
@@ -921,8 +917,7 @@ function hurtEnemy(e,dmg,isCrit,opt){
     else if(x==='shock'&&(e._shockCd||0)<=0){e._shockCd=.3;e.shock=.5;}
   }
   if(opt.knockback&&!e.boss){const a=Math.atan2(e.y-P.y,e.x-P.x);e.x+=Math.cos(a)*opt.knockback*0.1;e.y+=Math.sin(a)*opt.knockback*0.1;}
-  if(st.lifesteal>0){const now=performance.now();if(now-(P._lsSec||0)>=1000){P._lsSec=now;P._lsAcc=0;}   // §1.3 吸血按每秒封顶(≈maxhp×lifesteal×1.5/s)，攻速只增DPS不放大回血
-    const cap=st.maxhp*st.lifesteal*1.5;if((P._lsAcc||0)<cap){const heal=Math.min(dmg*st.lifesteal,cap-(P._lsAcc||0));P.hp=Math.min(st.maxhp,P.hp+heal);P._lsAcc=(P._lsAcc||0)+heal;}}
+  if(st.lifesteal>0)P.hp=Math.min(st.maxhp,P.hp+dmg*st.lifesteal);   // 回魂：每次命中按伤害比例回(与"回魂+X%"描述一致；强度靠道具吸血效率本身压低)
   if(!opt.noTrig){emit('onHit',{e,dmg,isCrit});
     if(P.mods[2]==='C'){P._charge=Math.min(100,(P._charge||0)+10);if(P._charge>=100){P._charge=0;P._overload=1;}}  // ③ 义体过载充能
     if(P._hype>0)skAOE(e.x,e.y,50,skHit('melee',.4),{col:'#ffd24a'});                                            // ④ 元气·全场嗨溅射

@@ -142,7 +142,7 @@ const ITEMS=[
   {id:'lottery',cls:'A',rarity:1,name:'转发抽奖', desc:'玄学 +12%',       price:22, mods:{luck:.12}},
   {id:'biz',   cls:'A',rarity:1,name:'商务对接',  desc:'恰饭 +3（波末打赏）',price:24, mods:{harvest:3}},
   {id:'banner',cls:'A',rarity:1,name:'应援手幅',  desc:'心态上限 +15',    price:30, mods:{maxhp:15}, set:'应援团'},
-  {id:'lozenge',cls:'A',rarity:2,name:'护嗓含片', desc:'回魂(吸血) +4%',  price:34, mods:{lifesteal:.04}},
+  {id:'lozenge',cls:'A',rarity:2,name:'护嗓含片', desc:'回魂(吸血) +2%',  price:34, mods:{lifesteal:.02}},
   {id:'script',cls:'A',rarity:1,name:'剧本台词卡',desc:'暴击率 +4%',      price:28, mods:{crit:.04}},
   {id:'magnet',cls:'A',rarity:1,name:'吸粉体质',  desc:'拾取范围 +40',    price:20, hidden:{pickup:40}},
   /* B·机制件（改行为，~20%） */
