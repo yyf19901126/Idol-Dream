@@ -1896,7 +1896,7 @@ function drawSummon(ctx,x,y,u){
 }
 function render(){
   ctx.save();
-  G._heavy=(G.bullets.length+G.ebullets.length+G.enemies.length)>200;   // 子弹/敌人海→降级辉光等高开销特效，保帧率
+  G._heavy=(G.bullets.length+G.ebullets.length+G.enemies.length)>160||(G.fx.length+G.floats.length)>70;   // 子弹/敌人海 或 大面积命中(暴击)刷出大量特效/浮字→降级辉光等高开销(shadowBlur)，保帧率
   const _fst=Math.min(5,P.mods.length);                // 阶段变化或地图背景刚加载完→重建地面
   if(!floorCv||_floorDirty||floorStage!==_fst){_floorDirty=false;makeFloor();}
   if(G.shake>0)ctx.translate(rnd(-G.shake,G.shake)*.5,rnd(-G.shake,G.shake)*.5);
@@ -2015,7 +2015,7 @@ function render(){
       ctx.restore();}
     if(f.type==='swing'){
       ctx.save();const a=1-k, cx=f.x, cy=f.y-26, ar=f.arc, R=f.r, s=f.style||'slash', A0=f.a-ar/2, A1=f.a+ar/2;
-      ctx.shadowColor=f.col;ctx.shadowBlur=10;ctx.strokeStyle=f.col;ctx.fillStyle=f.col;ctx.lineCap='round';ctx.globalAlpha=a;
+      ctx.shadowColor=f.col;ctx.shadowBlur=G._heavy?0:10;ctx.strokeStyle=f.col;ctx.fillStyle=f.col;ctx.lineCap='round';ctx.globalAlpha=a;
       if(s==='soundwave'){                       // 老麦克风：扇形声波涟漪（同心弧）
         for(let i=0;i<3;i++){const rr=R*(0.4+i*0.3)*(0.7+k*0.55);ctx.globalAlpha=a*(1-i*0.28);ctx.lineWidth=3.2-i*0.7;
           ctx.beginPath();ctx.arc(cx,cy,rr,A0,A1);ctx.stroke();}}
@@ -2068,11 +2068,11 @@ function render(){
     if(f.type==='flash'){ctx.globalAlpha=(1-k)*.35;ctx.fillStyle=f.col||'#fff';ctx.fillRect(0,0,AW,AH);ctx.globalAlpha=1;}
     if(f.type==='spark'){ctx.globalAlpha=1-k;ctx.fillStyle='#7af0ea';
       for(let i=0;i<4;i++)ctx.fillRect(f.x+rnd(-10,10),f.y+rnd(-10,10),2,2);ctx.globalAlpha=1;}
-    if(f.type==='arc'){ctx.save();ctx.globalAlpha=1-k;ctx.shadowColor=f.col;ctx.shadowBlur=10;ctx.strokeStyle=f.col;ctx.lineWidth=2.5;
+    if(f.type==='arc'){ctx.save();ctx.globalAlpha=1-k;ctx.shadowColor=f.col;ctx.shadowBlur=G._heavy?0:10;ctx.strokeStyle=f.col;ctx.lineWidth=2.5;
       ctx.beginPath();ctx.moveTo(f.x,f.y);const mx=(f.x+f.x2)/2+rnd(-12,12),my=(f.y+f.y2)/2+rnd(-12,12);ctx.lineTo(mx,my);ctx.lineTo(f.x2,f.y2);ctx.stroke();ctx.restore();}
     if(f.type==='hit'){                                   // 命中星爆闪光（方向性 4 角星 + 中心爆点）
       ctx.save();const a=1-k, rr=f.r*(0.55+k*0.85);
-      ctx.globalAlpha=a;ctx.strokeStyle=f.col;ctx.shadowColor=f.col;ctx.shadowBlur=f.crit?16:9;ctx.lineWidth=f.crit?3:2;ctx.lineCap='round';
+      ctx.globalAlpha=a;ctx.strokeStyle=f.col;ctx.shadowColor=f.col;ctx.shadowBlur=G._heavy?0:(f.crit?16:9);ctx.lineWidth=f.crit?3:2;ctx.lineCap='round';
       for(let i=0;i<4;i++){const ang=(f.a||0)+i*Math.PI/2;ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(ang)*rr,f.y+Math.sin(ang)*rr);ctx.stroke();}
       ctx.globalAlpha=a*0.85;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(f.x,f.y,Math.max(0,rr*0.3*(1-k)),0,7);ctx.fill();
       ctx.restore();}
@@ -2085,7 +2085,7 @@ function render(){
   /* 浮字（伤害数字：暴击更大、弹出感、上浮） */
   G.floats.forEach(f=>{
     const a=1-f.t/.9, pop=f.crit?(1+Math.max(0,(0.12-f.t)/0.12)*0.6):1, sz=Math.round(12*(f.sz||1)*pop);
-    ctx.save();ctx.globalAlpha=Math.max(0,a);if(f.crit){ctx.shadowColor=f.col;ctx.shadowBlur=10;}   // 仅暴击数字带辉光（普通数字省 shadowBlur）
+    ctx.save();ctx.globalAlpha=Math.max(0,a);if(f.crit&&!G._heavy){ctx.shadowColor=f.col;ctx.shadowBlur=10;}   // 仅暴击数字带辉光；大面积命中(_heavy)时连暴击辉光也关，shadowBlur 是 canvas 最贵开销
     ctx.fillStyle=f.col;ctx.font='bold '+sz+'px Menlo,monospace';ctx.textAlign='center';
     if(f.crit){ctx.strokeStyle='#7a2a00';ctx.lineWidth=3;ctx.strokeText(f.txt,f.x,f.y);}
     ctx.fillText(f.txt,f.x,f.y);ctx.restore();
@@ -2202,12 +2202,14 @@ function drawEnemy(e){
   if(e._enh){ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.30+.16*Math.sin(performance.now()/150);drawSpr();}  // 恶堕增强版：精灵脉动高亮
   if(e.hitFlash>0){ctx.globalCompositeOperation='lighter';ctx.globalAlpha=Math.min(1,e.hitFlash*4.5);drawSpr();}  // 命中泛白发光（同图叠 lighter）
   ctx.restore();
-  if(e._enh){const te=performance.now(),pr=e.r*2.2;ctx.save();           // 恶堕增强版：醒目红光(大光晕+脉动红环+头顶红尖标)
-    const aa=.40+.20*Math.sin(te/170);                                   // 大范围红色光晕(径向渐变)
-    const g=ctx.createRadialGradient(e.x,e.y,e.r*.35,e.x,e.y,pr);
-    g.addColorStop(0,'rgba(255,42,74,'+aa.toFixed(3)+')');g.addColorStop(.55,'rgba(255,30,60,'+(aa*.45).toFixed(3)+')');g.addColorStop(1,'rgba(255,30,60,0)');
-    ctx.fillStyle=g;ctx.beginPath();ctx.arc(e.x,e.y,pr,0,7);ctx.fill();
-    ctx.globalAlpha=.85+.15*Math.sin(te/100);ctx.strokeStyle='#ff2a4a';ctx.lineWidth=3;   // 脉动红描边环
+  if(e._enh){const te=performance.now();ctx.save();                      // 恶堕增强版：醒目红光(光晕+脉动红环+头顶红尖标)
+    const aa=.40+.20*Math.sin(te/170);
+    if(G._heavy){                                                        // 重载(大量恶堕敌/子弹海)：实色光晕替代 createRadialGradient(每敌每帧建渐变很贵)
+      ctx.globalAlpha=aa*.6;ctx.fillStyle='#ff2a4a';ctx.beginPath();ctx.arc(e.x,e.y,e.r*1.5,0,7);ctx.fill();ctx.globalAlpha=1;
+    }else{const pr=e.r*2.2,g=ctx.createRadialGradient(e.x,e.y,e.r*.35,e.x,e.y,pr);   // 大范围红色光晕(径向渐变)
+      g.addColorStop(0,'rgba(255,42,74,'+aa.toFixed(3)+')');g.addColorStop(.55,'rgba(255,30,60,'+(aa*.45).toFixed(3)+')');g.addColorStop(1,'rgba(255,30,60,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(e.x,e.y,pr,0,7);ctx.fill();}
+    ctx.globalAlpha=.85+.15*Math.sin(te/100);ctx.strokeStyle='#ff2a4a';ctx.lineWidth=3;   // 脉动红描边环(便宜,始终保留→恶堕敌一眼可辨)
     ctx.beginPath();ctx.arc(e.x,e.y,e.r*1.3+2.5*Math.sin(te/100),0,7);ctx.stroke();
     ctx.globalAlpha=.95;ctx.fillStyle='#ff2a4a';const my=e.y-e.r*2.75;                     // 头顶红尖标=已强化
     ctx.beginPath();ctx.moveTo(e.x,my-9);ctx.lineTo(e.x-6,my+2);ctx.lineTo(e.x+6,my+2);ctx.closePath();ctx.fill();
