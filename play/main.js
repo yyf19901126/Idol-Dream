@@ -862,11 +862,11 @@ function victory(){
 }
 
 /* ---------- 敌人（§5.1 数量优先 / §5.2 无尽指数）---------- */
-function baseScale(w){return 1+0.15*w+0.009*w*w;}                       // 单体血量(平衡#001 §5：w²系数 0.005→0.009 加速)
+function baseScale(w){return 1+0.15*w+0.013*w*w;}                       // 单体血量(平衡#003 §2：w²系数 0.009→0.013，15波后变陡)
 function enemyHP(d,w,mini){
-  if(d.boss)return Math.round(mini ? 600*(1+0.19*w) : d.hp*(1+0.12*Math.max(0,w-20)));  // 完整Boss / mini-boss(精英系数同步 0.16→0.19)
-  if(d.elite)return d.hp*(1+0.19*w);                                    // 精英 0.16→0.19
-  return w<=20 ? d.hp*baseScale(w) : d.hp*baseScale(20)*Math.pow(1.09,w-20);  // 无尽复利 1.085→1.09
+  if(d.boss)return Math.round(mini ? 1400*(1+0.24*w) : d.hp*Math.pow(1.13,Math.max(0,w-20)));  // 完整Boss改复利1.13 / mini-boss(平衡#003 §3/§4：base600→1400、系数0.19→0.24)
+  if(d.elite)return d.hp*(1+0.24*w);                                    // 精英 0.19→0.24(平衡#003 §4)
+  return w<=20 ? d.hp*baseScale(w) : d.hp*baseScale(20)*Math.pow(1.13,w-20);  // 无尽复利 1.09→1.13(平衡#003 §2)
 }
 function enemyDMG(d,w){return d.dmg*(1+0.08*w);}                        // 接触伤害(v0.3.8 0.07→0.08)
 /* §1.1 移速上限档（v0.3.6）：肉墙×1.65 / 远程×1.50 / 高速冲锋×1.30；Boss 等未列默认肉墙 1.65 */
@@ -1703,7 +1703,7 @@ function update(dt){
     const prog=G.waveDur>0?G.waveT/G.waveDur:0;                // 三段式节奏：前40%缓坡/中40%峰值×1.7/后20%收尾
     const peak=bossW?1:(prog<0.4?1:(prog<0.8?1.7:0.6));
     if(!bossW||G.bossRef){
-      G.spawnAcc+=dt*rate*peak*(bossW?.5:1);
+      G.spawnAcc+=dt*rate*peak*(bossW?.5:1)*(w<=3?0.7:1);   // 平衡#003 §1：前3波入场量×0.7，开局更柔和
       while(G.spawnAcc>=1){G.spawnAcc--;if(G.enemies.length<cap)spawnEnemy(pickType());}
     }
     if(!bossW&&G.waveT>=G.waveDur)endWave();           // Boss波靠击杀Boss结束（killEnemy→debutClear）
