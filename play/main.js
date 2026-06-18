@@ -71,7 +71,7 @@ const P={
   mods:[],weapons:[{id:'mic',lvl:1,cd:0}],
   agg:{},                       // 三层数值累加器（道具/升级写入；ST 折叠改造轴+套装）
   setN:{}, setFx:{},            // 套装计数 / 套装派生效果
-  ift:0,heat:0,skillCd:0,orbA:0,itemNames:[],itemIds:[],
+  ift:0,heat:0,skillCd:0,orbA:0,itemNames:[],itemIds:[],corruptN:{},
   nextHitBonus:0,giftAcc:0,reviveLeft:0,
 };
 const A=k=>P.agg[k]||0;
@@ -495,6 +495,32 @@ function offerableWeapon(id){
   if(!own&&P.weapons.length>=WEAPON_MAX)return false;             // 槽满又没有它，买不了
   return true;
 }
+/* 当前持有武器「吃」哪些属性（按 scales 权重聚合，无显式伤害 scales 的按 cat 退回）→ 用于道具加权 */
+function weaponStatWeights(){
+  const w={};
+  P.weapons.forEach(wp=>{const d=WEAPONS[wp.id];if(!d)return;const sc=d.scales||{};
+    for(const k in sc)w[k]=(w[k]||0)+sc[k];
+    if(!sc.dmgMelee&&!sc.dmgRanged&&!sc.dmgElem&&!sc.engi){
+      if(d.cat==='melee')w.dmgMelee=(w.dmgMelee||0)+1;
+      else if(d.cat==='ranged')w.dmgRanged=(w.dmgRanged||0)+1;
+      else if(d.cat==='tech'||d.cat==='zone'){w.dmgElem=(w.dmgElem||0)+.5;w.engi=(w.engi||0)+.5;}
+      else w.engi=(w.engi||0)+1;}
+  });
+  return w;
+}
+/* 从「当前可提供」道具池里按相关性加权挑一件：命中持有武器所吃属性的道具 → 权重略增(封顶~2.2×) */
+function pickOfferItem(){
+  const rel=weaponStatWeights();
+  const cands=ITEMS.filter(it=>offerableItem(it)&&!shopOffers.find(o=>o&&o.it&&o.it.id===it.id));
+  if(!cands.length)return null;
+  const wt=cands.map(it=>{let g=1;
+    if(it.mods){let m=0;for(const k in it.mods)if(it.mods[k]>0&&rel[k])m+=rel[k];
+      if(m>0)g*=1+Math.min(1.2,0.45+m*0.35);}            // 稍微提升：相关属性越吃，越容易出
+    return {it,g};});
+  let tot=0;wt.forEach(x=>tot+=x.g);let r=Math.random()*tot;
+  for(const x of wt){r-=x.g;if(r<=0)return x.it;}
+  return wt[wt.length-1].it;
+}
 function genOffer(){
   for(let n=0;n<50;n++){
     if(Math.random()<.55){
@@ -505,9 +531,8 @@ function genOffer(){
       if(shopOffers.find(o=>o&&o.w===id))continue;
       return {w:id};
     }else{
-      const it=pick(ITEMS);
-      if(!offerableItem(it))continue;
-      if(shopOffers.find(o=>o&&o.it&&o.it.id===it.id))continue;
+      const it=pickOfferItem();                          // §3 按持有武器吃的属性加权
+      if(!it)continue;
       return {it,corrupt:Math.random()<0.20};          // §6 恶堕：20%概率以恶堕版出现
     }
   }
@@ -554,9 +579,10 @@ function offerInfo(o){
         ${mline?'<br><span class="mech">⬆ '+TIER_NAME[nl-1]+'：'+mline+'</span>':''}${d.syn?'<br><span class="syn">协同·改造'+d.syn+'</span>':''}`};
   }
   const it=o.it,rc=o.corrupt?'#ff4a6e':(RARITY_COL[it.rarity]||'#ffffff');
+  const cn=o.corrupt?'<br><span style="color:#ff4a6e">⚡恶堕：正属性数值×2（代价不变），并加深全场恶堕值</span>':'';
   return {p,full:false,corrupt:o.corrupt,icon:'art/icons/items/'+it.id+'.png',col:rc,name:(o.corrupt?'恶堕·':'')+it.name,
     tag:`<span style="color:${rc}">${CLS_NAME[it.cls]||''} · ${RARITY_NAME[it.rarity]||'道具'}</span>`,
-    detail:`${it.desc}${it.set?'<br><span class="syn">套装·'+it.set+'</span>':''}${it.req?' <span class="k">限'+it.req+'系</span>':''}`};
+    detail:`${shownDesc(it,o.corrupt)}${cn}${it.set?'<br><span class="syn">套装·'+it.set+'</span>':''}${it.req?' <span class="k">限'+it.req+'系</span>':''}`};
 }
 let selSlot=-1;       // 当前点开详情的桌面槽位（-1=无）
 /* 桌面 4 道具槽（只放图标+锁标，详情弹卡单独居中渲染避免裁切） */
@@ -589,10 +615,10 @@ function ownItemsGrid(){
   if(!P.itemIds.length)return '<div class="gempty">暂无道具</div>';
   const c={};P.itemIds.forEach(id=>c[id]=(c[id]||0)+1);
   return Object.keys(c).map(id=>{const it=itemById(id);if(!it)return'';
-    const rc=RARITY_COL[it.rarity]||'#ffffff',ph=it.name[0];
-    return `<div class="gcell" data-l="${ph}" data-titem="${id}" style="border-color:${rc}88">
+    const corr=(P.corruptN&&P.corruptN[id])||0, rc=corr?'#ff4a6e':(RARITY_COL[it.rarity]||'#ffffff'),ph=it.name[0];
+    return `<div class="gcell" data-l="${ph}" data-titem="${id}" style="border-color:${rc}${corr?'':'88'}">
       <img src="art/icons/items/${id}.png" onerror="this.remove();this.parentNode.classList.add('ph')">
-      ${c[id]>1?'<i class="gcount">'+c[id]+'</i>':''}</div>`;
+      ${corr?'<i class="gcorrupt">恶堕</i>':''}${c[id]>1?'<i class="gcount">'+c[id]+'</i>':''}</div>`;
   }).join('');
 }
 /* 持有武器网格（sellable=true 显示卖出按钮；暂停面板用 false） */
@@ -606,9 +632,10 @@ function ownWeaponsGrid(sellable){
 }
 /* ---- 悬浮详情提示（持有道具/武器，商店与暂停共用）---- */
 function itemTipHTML(it){
-  const rc=RARITY_COL[it.rarity]||'#ffffff';
-  return `<div class="odhead"><b>${it.name}</b><span class="odtag"><span style="color:${rc}">${CLS_NAME[it.cls]||''} · ${RARITY_NAME[it.rarity]||'道具'}</span></span></div>
-    <div class="oddesc">${it.desc}${it.set?'<br><span class="syn">套装·'+it.set+'</span>':''}${it.req?' <span class="k">限'+it.req+'系</span>':''}</div>`;
+  const corr=(P.corruptN&&P.corruptN[it.id])||0, rc=corr?'#ff4a6e':(RARITY_COL[it.rarity]||'#ffffff');
+  const cline=corr?'<br><span style="color:#ff4a6e">⚡持有 '+corr+' 件恶堕版'+(isStatItem(it)?'（下方为翻倍后数值）':'（正属性已×2）')+'</span>':'';
+  return `<div class="odhead"><b style="color:${corr?'#ff4a6e':'inherit'}">${corr?'恶堕·':''}${it.name}</b><span class="odtag"><span style="color:${rc}">${CLS_NAME[it.cls]||''} · ${RARITY_NAME[it.rarity]||'道具'}</span></span></div>
+    <div class="oddesc">${shownDesc(it,corr>0)}${cline}${it.set?'<br><span class="syn">套装·'+it.set+'</span>':''}${it.req?' <span class="k">限'+it.req+'系</span>':''}</div>`;
 }
 function weaponTipHTML(w){
   const d=WEAPONS[w.id],inf=WEAPON_INFO[w.id]||{};
@@ -692,10 +719,11 @@ function statPanel(){
   const st=ST();
   const list=(shopTab==='primary'?PANEL_STATS:SECONDARY_STATS)
     .map(([k,lab,fm])=>`<div class="srow" data-stat="${k}" data-stat-label="${lab}"><span>${lab}</span><b>${fmtStat(st[k]||0,fm)}</b></div>`).join('');
+  const corr=(G.corrupt||0)>0?`<div class="srow corruptRow"><span style="color:#ff4a6e">恶堕值</span><b style="color:#ff4a6e">${Math.round(G.corrupt*100)}%</b></div>`:'';
   return `<div class="stabs">
       <button class="stab ${shopTab==='primary'?'on':''}" data-tab="primary">主属性</button>
       <button class="stab ${shopTab==='secondary'?'on':''}" data-tab="secondary">机制</button></div>
-    <div class="slist">${list}</div>`;
+    <div class="slist">${corr}${list}</div>`;
 }
 function shopModal(fresh){
   if(fresh!==false){rollOffers();emit('onShop',{});}
@@ -754,6 +782,10 @@ function corruptItem(it){                // 恶堕版：自身 mods/hidden/flags
   if(it.flags){c.flags={};for(const k in it.flags){const v=it.flags[k];c.flags[k]=(typeof v==='number'&&v>0)?v*2:v;}}
   return c;
 }
+/* 恶堕展示：把描述里的「正属性数值」×2（+N / +N% / +N.N/s）；负属性(−N)与机制数字不动。仅对纯数值件(mods/hidden,无flags/trig)安全 */
+function corruptDescVals(desc){return desc.replace(/\+\s*(\d+(?:\.\d+)?)/g,(m,n)=>'+'+(+(parseFloat(n)*2).toFixed(2)));}
+function isStatItem(it){return (it.mods||it.hidden)&&!it.flags&&!it.trig;}      // 纯数值件：恶堕可如实翻倍展示
+function shownDesc(it,corrupt){return (corrupt&&isStatItem(it))?corruptDescVals(it.desc):it.desc;}
 function buyOffer(i){
   const o=shopOffers[i];if(!o||o.sold)return;
   const p=price(o);
@@ -764,6 +796,7 @@ function buyOffer(i){
     if(own)own.lvl++;else P.weapons.push({id:o.w,lvl:1,cd:0});
   }else if(o.corrupt){                   // 恶堕版：翻倍数值 + 累加全局恶堕值(→敌人增强概率,封顶35%)
     applyItem(corruptItem(o.it));
+    P.corruptN[o.it.id]=(P.corruptN[o.it.id]||0)+1;                              // 记录该 id 的恶堕件数(持有栏标红/翻倍展示)
     G.corrupt=Math.min(1.0,(G.corrupt||0)+(CORRUPT_VAL[o.it.rarity||1]||.03));   // 恶堕值可至100%(全场敌人增强)
     toast('恶堕侵蚀加深 '+Math.round(G.corrupt*100)+'%…观众开始异变');
   }else applyItem(o.it);
@@ -2166,11 +2199,19 @@ function drawEnemy(e){
     else{const s=e.spr,sc=(e.boss?1.15:1.2)*2;ctx.drawImage(s,-s.width*sc/2,-s.height*sc,s.width*sc,s.height*sc);}
   };
   drawSpr();
-  if(e._enh){ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.22+.12*Math.sin(performance.now()/170);drawSpr();}  // 恶堕增强版：红黑侵蚀辉光(重绘叠色,仅染精灵)
+  if(e._enh){ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.30+.16*Math.sin(performance.now()/150);drawSpr();}  // 恶堕增强版：精灵脉动高亮
   if(e.hitFlash>0){ctx.globalCompositeOperation='lighter';ctx.globalAlpha=Math.min(1,e.hitFlash*4.5);drawSpr();}  // 命中泛白发光（同图叠 lighter）
   ctx.restore();
-  if(e._enh){ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.2+.1*Math.sin(performance.now()/150);   // 恶堕暗红外发光环
-    ctx.fillStyle='#ff2a4a';ctx.beginPath();ctx.arc(e.x,e.y,e.r*1.5,0,7);ctx.fill();ctx.restore();}
+  if(e._enh){const te=performance.now(),pr=e.r*2.2;ctx.save();           // 恶堕增强版：醒目红光(大光晕+脉动红环+头顶红尖标)
+    const aa=.40+.20*Math.sin(te/170);                                   // 大范围红色光晕(径向渐变)
+    const g=ctx.createRadialGradient(e.x,e.y,e.r*.35,e.x,e.y,pr);
+    g.addColorStop(0,'rgba(255,42,74,'+aa.toFixed(3)+')');g.addColorStop(.55,'rgba(255,30,60,'+(aa*.45).toFixed(3)+')');g.addColorStop(1,'rgba(255,30,60,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(e.x,e.y,pr,0,7);ctx.fill();
+    ctx.globalAlpha=.85+.15*Math.sin(te/100);ctx.strokeStyle='#ff2a4a';ctx.lineWidth=3;   // 脉动红描边环
+    ctx.beginPath();ctx.arc(e.x,e.y,e.r*1.3+2.5*Math.sin(te/100),0,7);ctx.stroke();
+    ctx.globalAlpha=.95;ctx.fillStyle='#ff2a4a';const my=e.y-e.r*2.75;                     // 头顶红尖标=已强化
+    ctx.beginPath();ctx.moveTo(e.x,my-9);ctx.lineTo(e.x-6,my+2);ctx.lineTo(e.x+6,my+2);ctx.closePath();ctx.fill();
+    ctx.restore();}
   if(e.burn>0||e.shock>0){                               // 灼烧/感电状态辉光（叠加发光，不糊住贴图）
     ctx.save();ctx.globalCompositeOperation='lighter';
     ctx.globalAlpha=.22+Math.abs(Math.sin(performance.now()/(e.shock>0?40:90)))*.22;
@@ -2258,6 +2299,10 @@ function updateHud(dt){
   const xb=$('xpBar');xb.querySelector('i').style.width=(G.xp/G.xpNext*100)+'%';
   xb.querySelector('span').textContent='人气 Lv'+G.level;
   $('gold').textContent='♥ '+G.gold;
+  const ch=$('corruptHud');                              // 大屏左下角·恶堕值(红字,>0才显示)
+  if(ch){const cv=G.corrupt||0;
+    if(cv>0){ch.style.display='flex';ch.innerHTML='<span class="chDot"></span>恶堕 '+Math.round(cv*100)+'%<span class="chBar"><i style="width:'+Math.round(cv*100)+'%"></i></span>';}
+    else ch.style.display='none';}
   updateSkillPanel();                                    // 左下角专属技能面板（现场人气热度下方）
   const target=86+Math.floor((G.kills*23)+(G.level*120)+(G.wave*180));
   viewersShow+=(target-viewersShow)*.2;
