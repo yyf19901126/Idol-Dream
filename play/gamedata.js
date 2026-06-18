@@ -202,6 +202,47 @@ const ITEMS=[
   {id:'cashReaction',cls:'C',rarity:2,name:'钞能力反应',desc:'每在商店花100打赏，下波全武器伤害+8%(波末清)',price:46, flags:{cashReaction:1}},
   {id:'topFanGuard',cls:'C',rarity:2,name:'榜一守护', desc:'收到礼物/打赏雨时获1层吸收护盾',price:48, flags:{topFanGuard:1}},
   {id:'compound',  cls:'C',rarity:4,name:'数据复利',  desc:'每累计500打赏永久+2%全伤(衰减,硬封顶+50%)',price:64, trig:{on:'onGold',fn:'compound',args:{}}},
+  /* ===== v0.3.5 平衡建议#002 · 多属性「构筑向」属性件（cls:A，10构筑×r1/r2/r3，正属性+取舍负属性）===== */
+  /* 近台·近战流 */
+  {id:'wristWrap',  cls:'A',rarity:1,name:'护腕绑带',  desc:'近台魅力 +7% · 抗压 +1；存在感 −6%',price:26, mods:{dmgMelee:.07,armor:1,range:-.06}},
+  {id:'wrestleGear',cls:'A',rarity:2,name:'摔角护具',  desc:'近台魅力 +10% · 心态上限 +12；远台 −8% · 移速 −3%',price:38, mods:{dmgMelee:.10,maxhp:12,dmgRanged:-.08,speed:-.03}},
+  {id:'ironCreed',  cls:'A',rarity:3,name:'铁血宣言',  desc:'近台魅力 +14% · 抗压 +2 · 回魂 +3%；存在感 −10% · 手速 −5%',price:50, mods:{dmgMelee:.14,armor:2,lifesteal:.03,range:-.10,aspd:-.05}},
+  /* 远台·远程流 */
+  {id:'tripod',     cls:'A',rarity:1,name:'长焦支架',  desc:'远台魅力 +7% · 存在感 +7%；移速 −5%',price:28, mods:{dmgRanged:.07,range:.07,speed:-.05}},
+  {id:'scope',      cls:'A',rarity:2,name:'狙击镜',    desc:'远台魅力 +10% · 暴击率 +5%；近台 −10%',price:38, mods:{dmgRanged:.10,crit:.05,dmgMelee:-.10}},
+  {id:'signalTower',cls:'A',rarity:3,name:'信号增幅塔',desc:'远台魅力 +13% · 存在感 +10% · 手速 +4%；心态上限 −15',price:52, mods:{dmgRanged:.13,range:.10,aspd:.04,maxhp:-15}},
+  /* 状态·应援共鸣流 */
+  {id:'warmPatch',  cls:'A',rarity:1,name:'暖宝宝贴',  desc:'应援共鸣 +8%；暴击率 −5%',price:28, mods:{dmgElem:.08,crit:-.05}},
+  {id:'diffuser',   cls:'A',rarity:2,name:'香薰机',    desc:'应援共鸣 +11% · 存在感 +6% · 义体 +4%；魅力 −4%',price:38, mods:{dmgElem:.11,range:.06,engi:.04,dmg:-.04}},
+  {id:'catalyst',   cls:'A',rarity:3,name:'化学催化剂',desc:'应援共鸣 +15% · 手速 +4%；心态上限 −10 · 暴击率 −6%',price:52, mods:{dmgElem:.15,aspd:.04,maxhp:-10,crit:-.06}},
+  /* 召唤·义体流 */
+  {id:'dock',       cls:'A',rarity:1,name:'充电底座',  desc:'义体 +6% · 心态回复 +0.4/s；手速 −4%',price:30, mods:{engi:.06,regen:.4,aspd:-.04}},
+  {id:'heatsink',   cls:'A',rarity:2,name:'散热背板',  desc:'义体 +10% · 抗压 +1 · 存在感 +5%；暴击率 −5%',price:40, mods:{engi:.10,armor:1,range:.05,crit:-.05}},
+  {id:'assembly',   cls:'A',rarity:3,name:'量产流水线',desc:'义体 +16% · 心态上限 +10；近台 −8% · 手速 −5%',price:54, mods:{engi:.16,maxhp:10,dmgMelee:-.08,aspd:-.05}},
+  /* 暴击·冷艳流 */
+  {id:'cueCard',    cls:'A',rarity:1,name:'台词卡套',  desc:'暴击率 +6% · 玄学 +6%；心态上限 −8',price:28, mods:{crit:.06,luck:.06,maxhp:-8}},
+  {id:'flashMoment',cls:'A',rarity:2,name:'闪光时刻',  desc:'暴击率 +8% · 远台魅力 +6%；心态上限 −12',price:38, mods:{crit:.08,dmgRanged:.06,maxhp:-12}},
+  {id:'fatalLine',  cls:'A',rarity:3,name:'致命独白',  desc:'暴击率 +11% · 手速 +4%；心态上限 −15 · 抗压 −1',price:50, mods:{crit:.11,aspd:.04,maxhp:-15,armor:-1}},
+  /* 攻速·连发流 */
+  {id:'beatBand',   cls:'A',rarity:1,name:'节拍手环',  desc:'手速 +7%；魅力 −4%',price:26, mods:{aspd:.07,dmg:-.04}},
+  {id:'energyCap',  cls:'A',rarity:2,name:'能量胶囊',  desc:'手速 +10% · 临场(闪避) +4%；存在感 −6%',price:38, mods:{aspd:.10,dodge:.04,range:-.06}},
+  {id:'overclockHR',cls:'A',rarity:3,name:'超频心率',  desc:'手速 +13% · 暴击率 +4%；心态上限 −10 · 抗压 −1',price:50, mods:{aspd:.13,crit:.04,maxhp:-10,armor:-1}},
+  /* 坦克·续航流 */
+  {id:'bigWarmer',  cls:'A',rarity:1,name:'加厚暖手宝',desc:'心态上限 +18 · 心态回复 +0.3/s；移速 −4%',price:30, mods:{maxhp:18,regen:.3,speed:-.04}},
+  {id:'vest',       cls:'A',rarity:2,name:'防弹背心',  desc:'抗压 +3 · 心态上限 +15；手速 −6%',price:40, mods:{armor:3,maxhp:15,aspd:-.06}},
+  {id:'steelWill',  cls:'A',rarity:3,name:'钢铁意志',  desc:'抗压 +3 · 回魂 +3% · 心态上限 +18；移速 −6% · 魅力 −5%',price:52, mods:{armor:3,lifesteal:.03,maxhp:18,speed:-.06,dmg:-.05}},
+  /* 经济·钞能力流 */
+  {id:'qrCode',     cls:'A',rarity:1,name:'收款码',    desc:'打赏 +10% · 恰饭 +2；魅力 −5%',price:26, mods:{gold:.10,harvest:2,dmg:-.05}},
+  {id:'bizSuit',    cls:'A',rarity:2,name:'商务套装',  desc:'打赏 +12% · 玄学 +6% · 恰饭 +3；心态上限 −10',price:38, mods:{gold:.12,luck:.06,harvest:3,maxhp:-10}},
+  {id:'capital',    cls:'A',rarity:3,name:'资本运作',  desc:'打赏 +15% · 经验(人气) +10%；魅力 −6% · 抗压 −1',price:50, mods:{gold:.15,xp:.10,dmg:-.06,armor:-1}},
+  /* 敏捷·走位流 */
+  {id:'runners',    cls:'A',rarity:1,name:'轻量跑鞋',  desc:'移速 +7% · 临场(闪避) +4%；心态上限 −8',price:28, mods:{speed:.07,dodge:.04,maxhp:-8}},
+  {id:'cape',       cls:'A',rarity:2,name:'风衣披风',  desc:'移速 +9% · 临场(闪避) +6% · 吸引力 +40；抗压 −1',price:38, mods:{speed:.09,dodge:.06,armor:-1}, hidden:{pickup:40}},
+  {id:'afterimage', cls:'A',rarity:3,name:'残影步法',  desc:'移速 +12% · 临场(闪避) +8%；心态上限 −12 · 近台 −6%',price:50, mods:{speed:.12,dodge:.08,maxhp:-12,dmgMelee:-.06}},
+  /* 玄学·全能流 */
+  {id:'luckCharm',  cls:'A',rarity:1,name:'锦鲤挂件',  desc:'玄学 +10% · 恰饭 +2（纯增益，便宜）',price:24, mods:{luck:.10,harvest:2}},
+  {id:'allTonic',   cls:'A',rarity:2,name:'全能补剂',  desc:'魅力 +5% · 手速 +4% · 暴击率 +3%；心态上限 −6',price:40, mods:{dmg:.05,aspd:.04,crit:.03,maxhp:-6}},
+  {id:'chosen',     cls:'A',rarity:3,name:'天选之人',  desc:'玄学 +20% · 暴击率 +5% · 打赏 +8%；心态上限 −12',price:50, mods:{luck:.20,crit:.05,gold:.08,maxhp:-12}},
 ];
 
 /* ---- 套装（标签阈值触发，§4.4）---- */
