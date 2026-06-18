@@ -553,7 +553,7 @@ function offerInfo(o){
         <br><span class="k">DPS@白</span> ${inf.dps||'—'} ｜ <span class="k">吃</span> ${scalesTxt(d)}
         ${mline?'<br><span class="mech">⬆ '+TIER_NAME[nl-1]+'：'+mline+'</span>':''}${d.syn?'<br><span class="syn">协同·改造'+d.syn+'</span>':''}`};
   }
-  const it=o.it,rc=o.corrupt?'#ff4a6e':(RARITY_COL[it.rarity]||'#9aa0b0');
+  const it=o.it,rc=o.corrupt?'#ff4a6e':(RARITY_COL[it.rarity]||'#ffffff');
   return {p,full:false,corrupt:o.corrupt,icon:'art/icons/items/'+it.id+'.png',col:rc,name:(o.corrupt?'恶堕·':'')+it.name,
     tag:`<span style="color:${rc}">${CLS_NAME[it.cls]||''} · ${RARITY_NAME[it.rarity]||'道具'}</span>`,
     detail:`${it.desc}${it.set?'<br><span class="syn">套装·'+it.set+'</span>':''}${it.req?' <span class="k">限'+it.req+'系</span>':''}`};
@@ -589,7 +589,7 @@ function ownItemsGrid(){
   if(!P.itemIds.length)return '<div class="gempty">暂无道具</div>';
   const c={};P.itemIds.forEach(id=>c[id]=(c[id]||0)+1);
   return Object.keys(c).map(id=>{const it=itemById(id);if(!it)return'';
-    const rc=RARITY_COL[it.rarity]||'#9aa0b0',ph=it.name[0];
+    const rc=RARITY_COL[it.rarity]||'#ffffff',ph=it.name[0];
     return `<div class="gcell" data-l="${ph}" data-titem="${id}" style="border-color:${rc}88">
       <img src="art/icons/items/${id}.png" onerror="this.remove();this.parentNode.classList.add('ph')">
       ${c[id]>1?'<i class="gcount">'+c[id]+'</i>':''}</div>`;
@@ -606,7 +606,7 @@ function ownWeaponsGrid(sellable){
 }
 /* ---- 悬浮详情提示（持有道具/武器，商店与暂停共用）---- */
 function itemTipHTML(it){
-  const rc=RARITY_COL[it.rarity]||'#9aa0b0';
+  const rc=RARITY_COL[it.rarity]||'#ffffff';
   return `<div class="odhead"><b>${it.name}</b><span class="odtag"><span style="color:${rc}">${CLS_NAME[it.cls]||''} · ${RARITY_NAME[it.rarity]||'道具'}</span></span></div>
     <div class="oddesc">${it.desc}${it.set?'<br><span class="syn">套装·'+it.set+'</span>':''}${it.req?' <span class="k">限'+it.req+'系</span>':''}</div>`;
 }
@@ -749,9 +749,9 @@ function shopModal(fresh){
 const CORRUPT_VAL=[0,.02,.03,.04,.06];   // §6 恶堕值/件 r1/r2/r3/r4
 function corruptItem(it){                // 恶堕版：自身 mods/hidden/flags 数值翻倍(仅加法区，不开新乘区)
   const c=Object.assign({},it);
-  if(it.mods){c.mods={};for(const k in it.mods)c.mods[k]=it.mods[k]*2;}
-  if(it.hidden){c.hidden={};for(const k in it.hidden)c.hidden[k]=it.hidden[k]*2;}
-  if(it.flags){c.flags={};for(const k in it.flags){const v=it.flags[k];c.flags[k]=(typeof v==='number')?v*2:v;}}
+  if(it.mods){c.mods={};for(const k in it.mods){const v=it.mods[k];c.mods[k]=v>0?v*2:v;}}        // 仅正属性翻倍，负属性/代价不翻倍
+  if(it.hidden){c.hidden={};for(const k in it.hidden){const v=it.hidden[k];c.hidden[k]=v>0?v*2:v;}}
+  if(it.flags){c.flags={};for(const k in it.flags){const v=it.flags[k];c.flags[k]=(typeof v==='number'&&v>0)?v*2:v;}}
   return c;
 }
 function buyOffer(i){

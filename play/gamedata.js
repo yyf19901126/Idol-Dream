@@ -3,7 +3,7 @@
 /* ---- 武器（魅力输出手段，无枪炮）· v0.3 ----
    cat=伤害类别(决定吃哪个类别乘区) ｜ scales=吃哪些能力值(展示/引导) ｜ syn=改造轴协同
    tf=品阶机制位解锁表(2绿/3蓝/4紫，§3.3)：升阶=数值×品阶系数 + 解锁机制位 */
-const TIER_MULT=[1,1.3,1.7,2.2], TIER_NAME=['素人','签约','当红','顶流'], TIER_COL=['#b8c0d0','#7af07a','#5aaaff','#c77bff'];
+const TIER_MULT=[1,1.3,1.7,2.2], TIER_NAME=['素人','签约','当红','顶流'], TIER_COL=['#ffffff','#5fdc6e','#4ea8ff','#ffd24a'];   // 品质色统一：白→绿→蓝→黄
 const WEAPONS={
   mic:    {name:'老麦克风', desc:'声波冲击，扇形近战', price:0,  base:13, cd:0.85, range:100, type:'melee',  arc:1.7, cat:'melee', scales:{dmgMelee:1,aspd:.5}, tags:['melee'], syn:'H', col:'#9a9aa8', tf:{2:{pierce:1},3:{knockback:9},4:{arc:.5}}},
   kiss:   {name:'飞吻',     desc:'追踪心形弹',         price:26, base:11, cd:1.05, range:340, type:'homing', cat:'ranged', scales:{dmgRanged:1}, tags:['ranged'], syn:'S', col:'#ff7bc1', tf:{2:{homing:.3},3:{multishot:1},4:{split:2}}},
@@ -126,7 +126,7 @@ function itemById(id){if(!_ITEM_IDX){_ITEM_IDX={};for(const it of ITEMS)_ITEM_ID
 /* ---- 道具体系 v0.3（六分类 schema，§4.1/§4.6）----
    字段: rarity(1路人/2热评/3榜一/4封神) ｜ cls(类) ｜ mods(层1面板) ｜ flags(层3机制位)
    ｜ hidden(层2隐藏值) ｜ trig(系统B触发){on,fn,args,icd,...} ｜ drawback(双刃代价) ｜ set(套装标签) ｜ req(流派限定) */
-const RARITY_NAME=['','路人安利','热评推荐','榜一钦点','封神'], RARITY_COL=['','#9aa0b0','#5ad8a0','#ffb84a','#ff7bc1'];
+const RARITY_NAME=['','路人安利','热评推荐','榜一钦点','封神'], RARITY_COL=['','#ffffff','#5fdc6e','#4ea8ff','#ffd24a'];   // 品质色统一：白(1)→绿(2)→蓝(3)→黄(4)，与武器品阶同色系
 const ITEMS=[
   /* A·属性件（地基，~30%） */
   {id:'drink', cls:'A',rarity:1,name:'能量饮料',  desc:'手速 +5%',        price:26, mods:{aspd:.05}},
