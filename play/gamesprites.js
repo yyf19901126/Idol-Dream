@@ -130,7 +130,7 @@ function drawChibi(g,x,y,mods,o){
   const wf=getWalkFrames(key);
   if(wf&&wf.length){                                     // 有走路帧：移动循环播帧、静止用站立帧f0+呼吸
     const nf=wf.length,t=o.t||0,idx=o.moving?Math.floor(t*9)%nf:0,fim=wf[idx]||wf[0];
-    const TH=64,sc=TH/fim.height,tw=fim.width*sc,hop=o.moving?0:Math.sin(t*2.4)*0.6,lift=o.lift||0,al=o.alpha==null?1:o.alpha;
+    const TH=51,sc=TH/fim.height,tw=fim.width*sc,hop=o.moving?0:Math.sin(t*2.4)*0.6,lift=o.lift||0,al=o.alpha==null?1:o.alpha;   // 51≈0.8×64 缩小20%(从脚底缩,对齐不变)
     g.save();g.translate(x,y+12);g.scale(1,.38);g.globalAlpha=al*(lift>0?Math.max(.25,1-lift/70):1);
     g.fillStyle='rgba(0,0,0,.40)';g.beginPath();g.arc(0,0,tw*0.30*(lift>0?Math.max(.5,1-lift/140):1),0,7);g.fill();g.restore();
     g.save();g.globalAlpha=al;g.translate(Math.round(x),Math.round(y+10-hop-lift));g.scale(-(o.face||1),1);g.imageSmoothingEnabled=false;
