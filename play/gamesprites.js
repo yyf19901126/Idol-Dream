@@ -130,8 +130,35 @@ function getWalkFrames(key){
       im.src='art/chibi_walk/'+key+'/f0'+i+'.png?v=px1';arr[i]=im;}}
   return WALK[key];
 }
+/* PixelLab 东西向走路精灵：e=south-east(朝右¾)/w=south-west(朝左¾),各6帧透明。按朝向选、不翻转 */
+const WALK2={},WALK2ING={};
+function getWalk2(key){
+  if(key in WALK2)return WALK2[key];
+  if(!WALK2ING[key]){WALK2ING[key]=1;const dd={e:new Array(6),w:new Array(6)};let done=0;
+    const fin=()=>{if(done>=12)WALK2[key]=(dd.e.every(a=>a&&a.width)&&dd.w.every(a=>a&&a.width))?dd:null;};
+    for(const dir of['e','w'])for(let i=0;i<6;i++){const im=new Image();
+      im.onload=()=>{done++;fin();};im.onerror=()=>{done++;WALK2[key]=null;};
+      im.src='art/chibi_walk2/'+key+'/'+dir+'/f0'+i+'.png?v=1';dd[dir][i]=im;}}
+  return WALK2[key];
+}
 function drawChibi(g,x,y,mods,o){
   const key=mods.join('')||'_';
+  const w2=getWalk2(key);
+  if(w2&&w2.e){                                          // PixelLab 东西向：按朝向选 e/w，不翻转(本身就是左右朝向¾视角)
+    const arr=(o.face>=0)?w2.e:w2.w,nf=arr.length,t=o.t||0,idx=o.moving?Math.floor(t*9)%nf:0,fim=arr[idx]||arr[0];
+    const TH=51,sc=TH/fim.height,tw=fim.width*sc,hop=o.moving?0:Math.sin(t*2.4)*0.6,lift=o.lift||0,al=o.alpha==null?1:o.alpha;   // PixelLab ¾侧面已比例正常,不套CHIBI_FIX
+    g.save();g.translate(x,y+12);g.scale(1,.38);g.globalAlpha=al*(lift>0?Math.max(.25,1-lift/70):1);
+    g.fillStyle='rgba(0,0,0,.40)';g.beginPath();g.arc(0,0,tw*0.55*(lift>0?Math.max(.5,1-lift/140):1),0,7);g.fill();g.restore();
+    g.save();g.globalAlpha=al;g.translate(Math.round(x),Math.round(y+10-hop-lift));g.imageSmoothingEnabled=false;
+    g.shadowColor='rgba(130,220,255,'+(0.45+0.14*Math.sin(t*3)).toFixed(3)+')';g.shadowBlur=7;
+    if(o.hit>0){const tw2=Math.max(2,Math.ceil(tw)),th2=Math.max(2,Math.ceil(TH));
+      const tc=_hitCanvas||(_hitCanvas=document.createElement('canvas'));if(tc.width<tw2||tc.height<th2){tc.width=tw2;tc.height=th2;}
+      const tg=tc.getContext('2d');tg.clearRect(0,0,tc.width,tc.height);tg.imageSmoothingEnabled=false;
+      tg.drawImage(fim,0,0,tw,TH);tg.globalCompositeOperation='source-atop';tg.fillStyle='rgba(255,50,58,'+Math.min(0.75,o.hit*3.2)+')';tg.fillRect(0,0,tw,TH);tg.globalCompositeOperation='source-over';
+      g.drawImage(tc,0,0,tw,TH,-tw/2,-TH,tw,TH);
+    }else g.drawImage(fim,-tw/2,-TH,tw,TH);
+    g.shadowBlur=0;g.restore();return;
+  }
   const wf=getWalkFrames(key);
   if(wf&&wf.length){                                     // 有走路帧：移动循环播帧、静止用站立帧f0+呼吸
     const nf=wf.length,t=o.t||0,idx=o.moving?Math.floor(t*9)%nf:0,fim=wf[idx]||wf[0];
