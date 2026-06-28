@@ -116,6 +116,11 @@ function getChibiImg(key){
 }
 /* 正面走路精灵帧(RD advanced_walking,64×64透明)：6帧齐才用,缺帧→null 回退单立绘 */
 const WALK={},WALKING={};
+/* 走路精灵·每形态微调(简单手调)：w=横向缩放(<1变窄,压"胖") · s=整体缩放(<1变小,缩"大")。缺省 1。
+   游戏里看着哪个偏胖/偏大,就在这里加一行,如 'H':{w:0.85} 或 'LSCYT':{s:0.92,w:0.9} */
+const CHIBI_FIX={
+  '_':{w:0.82},   // 原点大叔最胖→压窄(示范;其余按需补)
+};
 function getWalkFrames(key){
   if(key in WALK) return WALK[key];
   if(!WALKING[key]){WALKING[key]=1;const N=6,arr=new Array(N);let done=0;
@@ -130,7 +135,8 @@ function drawChibi(g,x,y,mods,o){
   const wf=getWalkFrames(key);
   if(wf&&wf.length){                                     // 有走路帧：移动循环播帧、静止用站立帧f0+呼吸
     const nf=wf.length,t=o.t||0,idx=o.moving?Math.floor(t*9)%nf:0,fim=wf[idx]||wf[0];
-    const TH=51,sc=TH/fim.height,tw=fim.width*sc,hop=o.moving?0:Math.sin(t*2.4)*0.6,lift=o.lift||0,al=o.alpha==null?1:o.alpha;   // 51≈0.8×64 缩小20%(从脚底缩,对齐不变)
+    const _fx=CHIBI_FIX[key]||0,_fw=(_fx&&_fx.w)||1,_fs=(_fx&&_fx.s)||1;   // 每形态微调:横压_fw/整缩_fs
+    const TH=51*_fs,sc=TH/fim.height,tw=fim.width*sc*_fw,hop=o.moving?0:Math.sin(t*2.4)*0.6,lift=o.lift||0,al=o.alpha==null?1:o.alpha;   // 51≈0.8×64;从脚底缩,横压居中,对齐不变
     g.save();g.translate(x,y+12);g.scale(1,.38);g.globalAlpha=al*(lift>0?Math.max(.25,1-lift/70):1);
     g.fillStyle='rgba(0,0,0,.40)';g.beginPath();g.arc(0,0,tw*0.30*(lift>0?Math.max(.5,1-lift/140):1),0,7);g.fill();g.restore();
     g.save();g.globalAlpha=al;g.translate(Math.round(x),Math.round(y+10-hop-lift));g.scale(-(o.face||1),1);g.imageSmoothingEnabled=false;
