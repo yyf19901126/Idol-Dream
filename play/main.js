@@ -56,6 +56,17 @@ const ENEMY_IMG={};
 ['luren','shuijun','penzi','baipiao','duijia','heifen','leping','boss'].forEach(t=>{
   const im=new Image();im.onload=()=>{if(im.width)ENEMY_IMG[t]=im;};im.src='art/enemies/'+t+'.png?v=px1';
 });
+/* 敌人东西向走路精灵（PixelLab ¾侧视, east朝右; 朝左在drawEnemy镜像）。缺帧→回退静态贴图ENEMY_IMG */
+const EWALK={},EWALKING={};
+function getEWalk(type){
+  if(type in EWALK)return EWALK[type];
+  if(!EWALKING[type]){EWALKING[type]=1;const fr=new Array(6);let done=0,bad=0;
+    for(let i=0;i<6;i++){const im=new Image();
+      im.onload=()=>{if(++done+bad>=6)EWALK[type]=(!bad&&fr.every(a=>a&&a.width))?fr:null;};
+      im.onerror=()=>{if(done+(++bad)>=6)EWALK[type]=null;};
+      im.src='art/enemy_walk2/'+type+'/e/f0'+i+'.png?v=1';fr[i]=im;}}
+  return EWALK[type];
+}
 const G={
   scr:'start',          // start play modal over win
   wave:0,waveT:0,waveDur:0,spawnAcc:0,elSched:[],
@@ -2184,9 +2195,11 @@ function drawEnemy(e){
   const img=ENEMY_IMG[e.type]||ENEMY_IMG[e.tex];      // 新Boss无专属贴图→用映射的现有贴图
   ctx.save();
   ctx.translate(e.x,e.y+e.r-((P._moshT>0&&e._hop)||0)); // 脚底基线（mosh蹦迪离地）
+  const wk=getEWalk(e.type)||(e.tex&&e.tex!==e.type?getEWalk(e.tex):null);   // 走路精灵(¾侧视,east朝右)优先,缺则静态贴图
   /* 果冻形变：随步态相位的挤压拉伸 + 横向晃动 + 轻微弹跳（绕脚底，越动越Q弹） */
   const jg=e.gait||0, js=Math.sin(jg), jc=Math.cos(jg);
-  const jamp=e.boss?0.05:(e.elite||e.mini?0.07:0.12);   // 体型越大越稳，小怪最Q弹
+  let jamp=e.boss?0.05:(e.elite||e.mini?0.07:0.12);     // 体型越大越稳，小怪最Q弹
+  if(wk)jamp*=0.4;                                       // 走路精灵自带步态→减果冻,免双重晃
   const pop=1+(e.hitPop||0)*0.20;                        // 命中放大弹（打击感）
   const jsx=(1+js*jamp)*pop, jsy=(1-js*jamp*0.85)*pop, jsh=jc*jamp*0.5;
   const hop=Math.max(0,-js)*(e.boss?2:3.5);             // 拉伸到顶时轻轻离地
@@ -2195,6 +2208,8 @@ function drawEnemy(e){
   if(P.x<e.x)ctx.scale(-1,1);                            // 朝向玩家
   if(e.dashT>0&&!e.boss)ctx.globalAlpha=.8;
   const drawSpr=()=>{
+    if(wk&&wk.length){const nf=wk.length,fim=wk[Math.floor((e.gait||0)*nf/6.2832)%nf]||wk[0];   // 按步态相位取帧(与果冻同周期)
+      const dh=e.r*3.4,dw=fim.width*dh/fim.height;ctx.imageSmoothingEnabled=false;ctx.drawImage(fim,-dw/2,-dh,dw,dh);return;}
     if(img&&img.width){const dh=e.r*3.4, dw=img.width*dh/img.height;ctx.imageSmoothingEnabled=false;ctx.drawImage(img,-dw/2,-dh,dw,dh);}
     else{const s=e.spr,sc=(e.boss?1.15:1.2)*2;ctx.drawImage(s,-s.width*sc/2,-s.height*sc,s.width*sc,s.height*sc);}
   };
